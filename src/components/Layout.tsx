@@ -13,13 +13,24 @@ export default function Layout() {
 
   const isActive = (path: string) => location.pathname === path
 
-  const navItems = [
+  // Itens de navegação para DESKTOP (Todos visíveis)
+  const desktopNavItems = [
     { path: '/', label: 'Dashboard', icon: '🏠' },
     { path: '/faq', label: 'FAQ', icon: '❓' },
     { path: '/despesas', label: 'Despesas', icon: '💰' },
     { path: '/votacoes', label: 'Votações', icon: '🗳️', badge: stats.votacoes.ativas },
-    { path: '/ocorrencias', label: 'Ocorrências', icon: '🚨', badge: stats.ocorrencias.abertas + stats.ocorrencias.em_andamento },
+    { path: '/ocorrencias', label: 'Ocorrências', icon: '🚨', badge: stats.ocorrencias.abertas },
     { path: '/comunicados', label: 'Comunicados', icon: '📢', badge: stats.comunicados.nao_lidos },
+  ]
+
+  // Itens de navegação para MOBILE (5 itens, substituindo Ocorrências por Perfil)
+  const mobileNavItems = [
+    { path: '/', label: 'Início', icon: '🏠' },
+    { path: '/faq', label: 'FAQ', icon: '❓' },
+    { path: '/despesas', label: 'Despesas', icon: '💰' },
+    { path: '/votacoes', label: 'Votações', icon: '🗳️', badge: stats.votacoes.ativas },
+    // SUBSTITUIÇÃO SOLICITADA: Ocorrências -> Perfil
+    { path: '/perfil', label: 'Perfil', icon: '👤' }, 
   ]
 
   async function handleLogout() {
@@ -29,11 +40,11 @@ export default function Layout() {
     }
   }
 
-  if (loading) return <LoadingSpinner message="Carregando ambiente do condomínio..." />
+  if (loading) return <LoadingSpinner message="Carregando..." />
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Header com Gradiente Dinâmico do Tema */}
+      {/* Header Desktop */}
       <header 
         className="text-white shadow-lg sticky top-0 z-50 transition-all duration-500"
         style={{ background: theme.gradients.header }}
@@ -41,33 +52,24 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
-              {/* Logo Dinâmica */}
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm">
-                {/* Ícone do prédio como fallback ou principal se não tiver logo */}
                 🏢
               </div>
-              
               <div>
-                {/* Título Fixo conforme solicitado */}
                 <h1 className="text-lg md:text-xl font-bold tracking-tight leading-tight">
                   Versix Meu Condomínio
                 </h1>
-                
-                {/* Subtítulo com Nome do Condomínio + Unidade */}
                 <p className="text-xs opacity-90 font-medium flex flex-col md:flex-row md:gap-1">
                   <span className="font-bold text-white">
-                    {profile?.condominio_name || 'Carregando condomínio...'}
+                    {profile?.condominio_name || 'Carregando...'}
                   </span>
-                  {profile?.unit_number && (
-                    <span className="hidden md:inline opacity-60">• Unidade {profile.unit_number}</span>
-                  )}
                 </p>
               </div>
             </Link>
 
-            {/* Desktop Nav */}
+            {/* Desktop Nav - Usa a lista completa */}
             <nav className="hidden md:flex items-center gap-1">
-              {navItems.map((item) => (
+              {desktopNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
@@ -88,14 +90,14 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* User Menu */}
+            {/* User Menu Desktop (Redireciona para perfil ao clicar no nome) */}
             <div className="flex items-center gap-3">
-              <div className="hidden md:block text-right">
+              <Link to="/perfil" className="hidden md:block text-right hover:opacity-80 transition">
                 <p className="text-sm font-bold leading-tight">{profile?.full_name?.split(' ')[0]}</p>
                 <p className="text-[10px] uppercase tracking-wider opacity-80 font-semibold">
                   {profile?.role === 'sindico' ? '👑 Síndico' : '🏠 Morador'}
                 </p>
-              </div>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-2 hover:bg-white/20 rounded-lg transition duration-200"
@@ -110,10 +112,10 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Mobile Bottom Nav */}
+      {/* Mobile Bottom Nav - Usa a lista mobile (com Perfil) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe safe-area-pb">
         <div className="grid grid-cols-5 gap-1 p-2">
-          {navItems.slice(0, 5).map((item) => {
+          {mobileNavItems.map((item) => {
             const active = isActive(item.path)
             return (
               <Link

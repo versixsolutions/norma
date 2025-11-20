@@ -11,6 +11,7 @@ import Despesas from './pages/Despesas'
 import Votacoes from './pages/Votacoes'
 import Ocorrencias from './pages/Ocorrencias'
 import Comunicados from './pages/Comunicados'
+import Profile from './pages/Profile' // Importação Nova
 import Layout from './components/Layout'
 
 // Componente de Rota Privada
@@ -28,7 +29,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    // Adicionando as flags futuras para limpar o console
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <ThemeProvider>
@@ -45,6 +45,7 @@ export default function App() {
               <Route path="/votacoes" element={<Votacoes />} />
               <Route path="/ocorrencias" element={<Ocorrencias />} />
               <Route path="/comunicados" element={<Comunicados />} />
+              <Route path="/perfil" element={<Profile />} /> {/* Rota Nova */}
             </Route>
           </Routes>
         </ThemeProvider>
