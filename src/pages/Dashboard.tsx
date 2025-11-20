@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 import { formatCurrency } from '../lib/utils'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 // Interface unificada para o feed de atualizações
@@ -25,6 +25,9 @@ export default function Dashboard() {
   const { stats } = useDashboardStats()
   const [updates, setUpdates] = useState<DashboardUpdate[]>([])
   const [loadingUpdates, setLoadingUpdates] = useState(true)
+  
+  // Ref para controlar o scroll horizontal
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (profile?.id) {
@@ -32,10 +35,20 @@ export default function Dashboard() {
     }
   }, [profile?.id])
 
+  // Função para rolar os cards horizontalmente
+  const scrollCards = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 220 // Largura do card + gap
+      scrollContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   async function loadUnifiedFeed() {
     setLoadingUpdates(true)
     
-    // Função auxiliar para buscar dados com tratamento de erro individual
     const fetchData = async (table: string, queryBuilder: any) => {
       try {
         const { data, error } = await queryBuilder
@@ -50,7 +63,6 @@ export default function Dashboard() {
       }
     }
 
-    // Buscas individuais
     const comunicados = await fetchData('comunicados', 
       supabase.from('comunicados').select('*').order('published_at', { ascending: false }).limit(5)
     )
@@ -73,13 +85,12 @@ export default function Dashboard() {
 
     const newUpdates: DashboardUpdate[] = []
 
-    // Processamento dos dados
     comunicados?.forEach((c: any) => {
       const isUrgent = c.priority === 'urgente' || c.type === 'urgente'
       newUpdates.push({
         id: `com-${c.id}`,
         type: 'comunicado',
-        title: isUrgent ? `COMUNICADO URGENTE: ${c.title}` : c.title,
+        title: isUrgent ? `URGENTE: ${c.title}` : c.title,
         description: c.content,
         date: c.published_at, 
         icon: isUrgent ? '📢' : '📌',
@@ -94,7 +105,7 @@ export default function Dashboard() {
       newUpdates.push({
         id: `desp-${d.id}`,
         type: 'despesa',
-        title: 'Nova Despesa Registrada',
+        title: 'Nova Despesa',
         description: `${d.description} - ${formatCurrency(d.amount)}`,
         date: d.created_at,
         icon: '💰',
@@ -108,7 +119,7 @@ export default function Dashboard() {
       newUpdates.push({
         id: `oco-${o.id}`,
         type: 'ocorrencia',
-        title: `Atualização em Ocorrência`,
+        title: `Ocorrência Atualizada`,
         description: o.title,
         date: o.updated_at || o.created_at,
         icon: '🚨',
@@ -123,7 +134,7 @@ export default function Dashboard() {
       newUpdates.push({
         id: `vot-${v.id}`,
         type: 'votacao',
-        title: isActive ? 'Nova Votação Iniciada' : 'Votação Encerrada',
+        title: isActive ? 'Nova Votação' : 'Votação Encerrada',
         description: v.title,
         date: v.created_at,
         icon: '🗳️',
@@ -137,7 +148,7 @@ export default function Dashboard() {
       newUpdates.push({
         id: `faq-${f.id}`,
         type: 'faq',
-        title: 'Nova Pergunta Respondida',
+        title: 'Pergunta Respondida',
         description: f.question,
         date: f.created_at,
         icon: '❓',
@@ -164,117 +175,146 @@ export default function Dashboard() {
     const hours = Math.floor(diff / 3600000)
     const days = Math.floor(diff / 86400000)
 
-    if (days > 0) return `há ${days} dia${days > 1 ? 's' : ''}`
+    if (days > 0) return `há ${days}d`
     if (hours > 0) return `há ${hours}h`
     if (minutes > 0) return `há ${minutes}m`
     return 'agora'
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    // Adicionado padding horizontal (px-4) e vertical (py-6) para evitar colagem nas bordas
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      
       {/* Saudação */}
       <div className="mb-6">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
           Olá, {profile?.full_name?.split(' ')[0]}! 👋
         </h2>
-        <p className="text-gray-600">Bem-vindo ao seu painel de gestão condominial</p>
+        <p className="text-gray-600 text-sm">Bem-vindo ao seu painel</p>
       </div>
 
-      {/* Stats Cards */}
-      {/* Ajuste no grid: md:grid-cols-5 para acomodar 5 cards em uma linha */}
-      <div className="
-        flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4 mb-6
-        md:grid md:grid-cols-5 md:overflow-visible md:pb-0 md:snap-none
-        scrollbar-hide
-      ">
+      {/* Container de Cards com Setas de Navegação */}
+      <div className="relative group mb-8">
         
-        {/* NOVO CARD: Comunicados (1ª Posição) */}
-        <div onClick={() => navigate('/comunicados')} className="min-w-[260px] snap-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1 relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-4xl">📢</div>
-            {stats.comunicados.nao_lidos > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse">
-                NOVO
-              </span>
-            )}
-          </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">Comunicados</h3>
-          <p className="text-3xl font-bold text-purple-600 mb-1">{stats.comunicados.nao_lidos}</p>
-          <p className="text-xs text-gray-500">não lidos</p>
+        {/* Botão Seta Esquerda (Desktop) */}
+        <button 
+          onClick={() => scrollCards('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 -ml-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+        </button>
+
+        {/* Botão Seta Direita (Desktop) */}
+        <button 
+          onClick={() => scrollCards('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 -mr-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+        </button>
+
+        {/* Indicador Visual de Scroll (Mobile) - Seta pulsante à direita */}
+        <div className="md:hidden absolute right-0 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center">
+           <div className="bg-gradient-to-l from-white via-white/80 to-transparent pl-4 py-4">
+              <svg className="w-6 h-6 text-primary animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+           </div>
         </div>
 
-        {/* FAQ (2ª Posição) */}
-        <div onClick={() => navigate('/faq')} className="min-w-[260px] snap-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-4xl">❓</div>
+        {/* Lista de Cards Scrollável */}
+        <div 
+          ref={scrollContainerRef}
+          className="
+            flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-3 pb-4
+            scrollbar-hide scroll-smooth
+          "
+        >
+          {/* CARD 1: Comunicados */}
+          {/* Tamanho reduzido: min-w-[200px] (era 260px) */}
+          <div onClick={() => navigate('/comunicados')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl">📢</div>
+              {stats.comunicados.nao_lidos > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+                  {stats.comunicados.nao_lidos} NOVOS
+                </span>
+              )}
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Comunicados</h3>
+            <p className="text-xs text-gray-500">Mural de avisos</p>
           </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">FAQ</h3>
-          <p className="text-3xl font-bold text-primary mb-1">{stats.faq.answeredThisMonth}</p>
-          <p className="text-xs text-gray-500">perguntas respondidas</p>
-        </div>
 
-        {/* Despesas (3ª Posição) */}
-        <div onClick={() => navigate('/despesas')} className="min-w-[260px] snap-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-4xl">💰</div>
+          {/* CARD 2: FAQ */}
+          <div onClick={() => navigate('/faq')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl">❓</div>
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">FAQ</h3>
+            <p className="text-2xl font-bold text-primary mb-0.5">{stats.faq.answeredThisMonth}</p>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold">Dúvidas respondidas</p>
           </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">Despesas</h3>
-          <p className="text-2xl font-bold text-green-600 mb-1">{formatCurrency(stats.despesas.totalMes)}</p>
-          <p className="text-xs text-gray-500">
-            {stats.despesas.count} lançamentos em {stats.despesas.monthLabel}
-          </p>
-        </div>
 
-        {/* Votações (4ª Posição) */}
-        <div onClick={() => navigate('/votacoes')} className="min-w-[260px] snap-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer relative transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-4xl">🗳️</div>
-            {stats.votacoes.ativas > 0 && (
-              <span className="bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
-                {stats.votacoes.ativas}
-              </span>
-            )}
+          {/* CARD 3: Despesas */}
+          <div onClick={() => navigate('/despesas')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl">💰</div>
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Despesas</h3>
+            <p className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(stats.despesas.totalMes)}</p>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold truncate">
+              Em {stats.despesas.monthLabel}
+            </p>
           </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">Votações</h3>
-          <p className="text-3xl font-bold text-primary mb-1">{stats.votacoes.ativas}</p>
-          <p className="text-xs text-gray-500">
-            {stats.votacoes.ativas > 0 ? 'Votações ativas' : 'Nenhuma ativa'}
-          </p>
-        </div>
 
-        {/* Ocorrências (5ª Posição) */}
-        <div onClick={() => navigate('/ocorrencias')} className="min-w-[260px] snap-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-4xl">🚨</div>
-            {(stats.ocorrencias.abertas + stats.ocorrencias.em_andamento) > 0 && (
-              <span className="bg-orange-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                {stats.ocorrencias.abertas + stats.ocorrencias.em_andamento}
-              </span>
-            )}
+          {/* CARD 4: Votações */}
+          <div onClick={() => navigate('/votacoes')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer relative transition-transform hover:-translate-y-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl">🗳️</div>
+              {stats.votacoes.ativas > 0 && (
+                <span className="bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  ATIVAS
+                </span>
+              )}
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Votações</h3>
+            <p className="text-2xl font-bold text-primary mb-0.5">{stats.votacoes.ativas}</p>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold">Em andamento</p>
           </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">Ocorrências</h3>
-          <p className="text-3xl font-bold text-orange-600 mb-1">
-            {stats.ocorrencias.abertas + stats.ocorrencias.em_andamento}
-          </p>
-          <p className="text-xs text-gray-500">{stats.ocorrencias.abertas} abertas</p>
+
+          {/* CARD 5: Ocorrências */}
+          <div onClick={() => navigate('/ocorrencias')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-3xl">🚨</div>
+              {(stats.ocorrencias.abertas + stats.ocorrencias.em_andamento) > 0 && (
+                <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {stats.ocorrencias.abertas + stats.ocorrencias.em_andamento}
+                </span>
+              )}
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Ocorrências</h3>
+            <p className="text-xl font-bold text-orange-600 mb-0.5">
+              {stats.ocorrencias.abertas}
+            </p>
+            <p className="text-[10px] text-gray-400 uppercase font-semibold">Abertas agora</p>
+          </div>
         </div>
       </div>
 
       {/* Últimas Atualizações */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            ⚡ Últimas Atualizações
+          <h3 className="text-lg md:text-xl font-bold text-gray-900 flex items-center gap-2">
+            ⚡ Atualizações
           </h3>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-            Em tempo real
+          <span className="text-[10px] md:text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full font-medium">
+            Tempo real
           </span>
         </div>
         
         {loadingUpdates ? (
           <div className="space-y-4 animate-pulse">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 bg-gray-100 rounded-lg"></div>
+              <div key={i} className="h-16 bg-gray-50 rounded-lg"></div>
             ))}
           </div>
         ) : (
@@ -287,31 +327,28 @@ export default function Dashboard() {
                   key={item.id}
                   onClick={() => navigate(item.link)}
                   className={`
-                    relative flex gap-4 p-4 transition cursor-pointer hover:bg-gray-50
-                    ${index !== updates.length - 1 ? 'border-b border-gray-100' : ''}
+                    relative flex gap-3 md:gap-4 p-3 md:p-4 transition cursor-pointer hover:bg-gray-50 rounded-lg
+                    ${index !== updates.length - 1 ? 'border-b border-gray-50 md:border-gray-100' : ''}
                     ${item.isPinned ? 'bg-yellow-50/50 hover:bg-yellow-50' : ''}
                   `}
                 >
-                  {/* Linha vertical (Desktop) */}
-                  <div className="absolute left-[2rem] top-0 bottom-0 w-px bg-gray-100 -z-10 md:block hidden"></div>
-
                   {/* Ícone */}
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl shadow-sm z-10 ${item.bgColor}`}>
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-lg md:text-xl shadow-sm ${item.bgColor}`}>
                     {item.icon}
                   </div>
 
                   {/* Conteúdo */}
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
-                      <h4 className={`text-sm md:text-base font-bold truncate pr-2 ${item.color}`}>
-                        {item.isPinned && <span className="mr-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase tracking-wide">Fixo</span>}
+                      <h4 className={`text-sm font-bold truncate pr-2 ${item.color}`}>
+                        {item.isPinned && <span className="mr-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase tracking-wide border border-red-200">Fixo</span>}
                         {item.title}
                       </h4>
-                      <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0">
                         {formatTimeAgo(item.date)}
                       </span>
                     </div>
-                    <p className="text-xs md:text-sm text-gray-600 mt-1 line-clamp-2">
+                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
                       {item.description}
                     </p>
                   </div>
@@ -322,7 +359,7 @@ export default function Dashboard() {
         )}
         
         <div className="mt-6 text-center">
-            <button onClick={() => navigate('/comunicados')} className="text-primary text-sm font-semibold hover:underline">
+            <button onClick={() => navigate('/comunicados')} className="text-primary text-xs md:text-sm font-semibold hover:underline opacity-80 hover:opacity-100 transition">
               Ver todos os comunicados &rarr;
             </button>
         </div>
