@@ -1,52 +1,54 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { useAuth } from './AuthContext'
+import { AuthContext } from './AuthContext' 
 import { supabase } from '../lib/supabase'
-import pinheiroParkTheme, { Theme } from '../config/theme-pinheiropark'
+
+import pinheiroParkTheme from '../config/theme-pinheiropark'
+// CORREÇÃO: Usar 'import type' previne o erro de SyntaxError no navegador
+import type { Theme } from '../config/theme-pinheiropark'
 import versixTheme from '../config/theme-versix'
 
 interface ThemeContextType {
   theme: Theme
   loading: boolean
+  toggleTheme: () => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { user, profile } = useAuth()
-  const [currentTheme, setCurrentTheme] = useState<Theme>(versixTheme) // Tema padrão
+  // Usamos o contexto diretamente para maior segurança
+  const auth = useContext(AuthContext)
+  
+  const [currentTheme, setCurrentTheme] = useState<Theme>(versixTheme)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadTheme() {
-      if (!user || !profile?.condominio_id) {
+      // Se o usuário não estiver logado ou contexto não carregou, mantém tema padrão
+      if (!auth || !auth.user || !auth.profile?.condominio_id) {
         setCurrentTheme(versixTheme)
         setLoading(false)
         return
       }
 
       try {
-        // Busca o slug do condomínio do usuário
+        setLoading(true)
         const { data, error } = await supabase
           .from('condominios')
           .select('slug, theme_config')
-          .eq('id', profile.condominio_id)
+          .eq('id', auth.profile.condominio_id)
           .single()
 
         if (error) throw error
 
-        // LÓGICA DE SELEÇÃO DE TEMA
-        // Mapeia o slug do banco de dados para o arquivo de tema importado
         switch (data?.slug) {
           case 'pinheiropark':
             setCurrentTheme(pinheiroParkTheme)
             break
           case 'versix':
+          default:
             setCurrentTheme(versixTheme)
             break
-          default:
-            // Se tiver config JSON no banco, poderia usar aqui. 
-            // Por enquanto, fallback para Versix.
-            setCurrentTheme(versixTheme)
         }
       } catch (err) {
         console.error('Erro ao carregar tema:', err)
@@ -57,10 +59,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
 
     loadTheme()
-  }, [user, profile?.condominio_id])
+  }, [auth?.user, auth?.profile?.condominio_id])
+
+  const toggleTheme = () => {
+    console.log('Troca manual desativada em favor do tema do condomínio')
+  }
 
   return (
-    <ThemeContext.Provider value={{ theme: currentTheme, loading }}>
+    <ThemeContext.Provider value={{ theme: currentTheme, loading, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   )

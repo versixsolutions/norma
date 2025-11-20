@@ -7,41 +7,42 @@ interface DashboardStats {
   despesas: { totalMes: number; count: number }
   votacoes: { ativas: number; participation: number }
   ocorrencias: { abertas: number; em_andamento: number }
+  // Propriedade nova necessária para o Layout não quebrar
+  comunicados: { nao_lidos: number }
 }
 
 const INITIAL_STATS: DashboardStats = {
   faq: { answeredThisMonth: 0 },
   despesas: { totalMes: 0, count: 0 },
   votacoes: { ativas: 0, participation: 0 },
-  ocorrencias: { abertas: 0, em_andamento: 0 }
+  ocorrencias: { abertas: 0, em_andamento: 0 },
+  comunicados: { nao_lidos: 0 }
 }
 
 export function useDashboardStats() {
   const [stats, setStats] = useState<DashboardStats>(INITIAL_STATS)
   const [loading, setLoading] = useState(true)
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
 
   useEffect(() => {
     if (profile?.condominio_id) {
       loadStats()
     }
-  }, [profile?.condominio_id])
+  }, [profile?.condominio_id, user?.id])
 
   async function loadStats() {
     try {
       setLoading(true)
       
-      // 1. Despesas do Mês Atual
       const startOfMonth = new Date()
       startOfMonth.setDate(1)
       startOfMonth.setHours(0, 0, 0, 0)
       
+      // 1. Despesas do Mês
       const { data: despesas } = await supabase
         .from('despesas')
         .select('amount')
         .gte('due_date', startOfMonth.toISOString())
-        // Se quiser filtrar pelo condomínio do usuário, precisaria de um join ou RLS configurado
-        // Assumindo que o RLS já filtra pelo tenant do usuário:
       
       const totalDespesas = despesas?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0
 
@@ -50,7 +51,7 @@ export function useDashboardStats() {
       const { data: votacoes } = await supabase
         .from('votacoes')
         .select('id')
-        .gt('end_date', now) // Data de fim maior que agora
+        .gt('end_date', now)
       
       // 3. Ocorrências por Status
       const { data: ocorrencias } = await supabase
@@ -61,10 +62,29 @@ export function useDashboardStats() {
       const abertas = ocorrencias?.filter(o => o.status === 'aberto').length || 0
       const emAndamento = ocorrencias?.filter(o => o.status === 'em_andamento').length || 0
 
-      // 4. FAQs (Total)
+      // 4. FAQs
       const { count: faqCount } = await supabase
         .from('faqs')
         .select('*', { count: 'exact', head: true })
+
+      // 5. Comunicados (Lógica de não lidos)
+      let unreadCount = 0
+      if (user) {
+        // Busca IDs de todos os comunicados
+        const { data: allComunicados } = await supabase
+          .from('comunicados')
+          .select('id')
+        
+        // Busca IDs dos que o usuário já leu
+        const { data: reads } = await supabase
+          .from('comunicado_reads')
+          .select('comunicado_id')
+          .eq('user_id', user.id)
+        
+        const readIds = new Set(reads?.map(r => r.comunicado_id) || [])
+        // Calcula a diferença
+        unreadCount = allComunicados?.filter(c => !readIds.has(c.id)).length || 0
+      }
 
       setStats({
         faq: { answeredThisMonth: faqCount || 0 },
@@ -74,11 +94,14 @@ export function useDashboardStats() {
         },
         votacoes: { 
           ativas: votacoes?.length || 0, 
-          participation: 0 // Cálculo de participação requer query mais complexa de votos
+          participation: 0 
         },
         ocorrencias: { 
           abertas, 
           em_andamento: emAndamento 
+        },
+        comunicados: {
+          nao_lidos: unreadCount
         }
       })
 

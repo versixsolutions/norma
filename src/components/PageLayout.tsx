@@ -21,7 +21,7 @@ export default function PageLayout({
 }: PageLayoutProps) {
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
-  const { theme } = useTheme()
+  const { theme } = useTheme() // Tema dinâmico
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-6">
@@ -81,9 +81,6 @@ export default function PageLayout({
       <main className="max-w-5xl mx-auto px-4 py-6 animate-fade-in">
         {children}
       </main>
-
-      {/* Mobile Nav Spacer is handled by main Layout usually, 
-          but if this is standalone, the global Layout handles it. */}
     </div>
   )
 }

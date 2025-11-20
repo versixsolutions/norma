@@ -6,11 +6,11 @@ interface UserProfile {
   id: string
   email: string
   full_name: string | null
-  role: 'sindico' | 'morador' | 'admin' | 'pending' // Adicionado 'pending'
+  role: 'sindico' | 'morador' | 'admin' | 'pending'
   phone: string | null
   unit_number: string | null
-  condominio_id: string | null // Novo campo
-  condominio_name: string | null // Nome do condomínio para exibição
+  condominio_id: string | null
+  condominio_name: string | null
 }
 
 interface AuthContextType {
@@ -19,13 +19,13 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, fullName: string, condominioId: string) => Promise<void> // Adicionado condominioId
+  signUp: (email: string, password: string, fullName: string, condominioId: string) => Promise<void>
   signOut: () => Promise<void>
   isSindico: boolean
   isAdmin: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -44,9 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -62,22 +60,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(userId: string) {
     try {
+      // CORREÇÃO: .maybeSingle() evita erro 406 se o perfil não existir
       const { data, error } = await supabase
         .from('users')
-        .select('*, condominios(name)') // Fazendo JOIN para pegar o nome do condomínio
+        .select('*, condominios(name)')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
       
-      // Mapeia o perfil, extraindo o nome do condomínio do JOIN
-      const mappedProfile: UserProfile = {
-        ...data,
-        condominio_name: data.condominios?.name || null,
-        condominio_id: data.condominio_id,
+      if (data) {
+        const mappedProfile: UserProfile = {
+          ...data,
+          condominio_name: data.condominios?.name || null,
+          condominio_id: data.condominio_id,
+        }
+        setProfile(mappedProfile)
       }
-      
-      setProfile(mappedProfile)
     } catch (error) {
       console.error('Erro ao carregar perfil:', error)
     } finally {
@@ -86,10 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
 
@@ -100,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         data: {
           full_name: fullName,
-          condominio_id: condominioId, // Passa o ID do condomínio para o trigger
+          condominio_id: condominioId,
         },
       },
     })
@@ -110,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    setProfile(null)
   }
 
   const value = {

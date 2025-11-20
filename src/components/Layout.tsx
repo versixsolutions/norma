@@ -9,7 +9,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
   const { stats } = useDashboardStats()
-  const { theme, loading } = useTheme() // Usando o tema dinâmico
+  const { theme, loading } = useTheme() // Tema dinâmico carregado aqui
 
   const isActive = (path: string) => location.pathname === path
 
@@ -19,7 +19,7 @@ export default function Layout() {
     { path: '/despesas', label: 'Despesas', icon: '💰' },
     { path: '/votacoes', label: 'Votações', icon: '🗳️', badge: stats.votacoes.ativas },
     { path: '/ocorrencias', label: 'Ocorrências', icon: '🚨', badge: stats.ocorrencias.abertas + stats.ocorrencias.em_andamento },
-    { path: '/comunicados', label: 'Comunicados', icon: '📢', badge: stats.comunicados.nao_lidos || 0 },
+    { path: '/comunicados', label: 'Comunicados', icon: '📢', badge: stats.comunicados.nao_lidos },
   ]
 
   async function handleLogout() {
@@ -29,11 +29,12 @@ export default function Layout() {
     }
   }
 
-  if (loading) return <LoadingSpinner message="Carregando ambiente..." />
+  // Mostra spinner enquanto decide qual tema carregar
+  if (loading) return <LoadingSpinner message="Carregando ambiente do condomínio..." />
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Header com Gradiente Dinâmico */}
+      {/* Header com Gradiente Dinâmico do Tema */}
       <header 
         className="text-white shadow-lg sticky top-0 z-50 transition-all duration-500"
         style={{ background: theme.gradients.header }}
@@ -47,12 +48,18 @@ export default function Layout() {
                   src={theme.branding.logoWhiteUrl} 
                   alt={theme.name} 
                   className="h-10 w-auto object-contain transition-transform group-hover:scale-105" 
+                  onError={(e) => {
+                    // Fallback se a imagem não carregar
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
                 />
-              ) : (
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm">
-                  🏢
-                </div>
-              )}
+              ) : null}
+              
+              {/* Fallback visual caso não tenha logo */}
+              <div className={`w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm ${theme.branding.logoWhiteUrl ? 'hidden' : ''}`}>
+                🏢
+              </div>
               
               <div>
                 <h1 className="text-xl font-bold tracking-tight">{theme.name}</h1>
@@ -108,7 +115,7 @@ export default function Layout() {
       </header>
 
       {/* Mobile Bottom Nav com Cores Dinâmicas */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe safe-area-pb">
         <div className="grid grid-cols-5 gap-1 p-2">
           {navItems.slice(0, 5).map((item) => {
             const active = isActive(item.path)

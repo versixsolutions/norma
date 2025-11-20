@@ -1,5 +1,8 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './contexts/AuthContext'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ThemeProvider } from './contexts/ThemeContext'
+
+// Pages
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
@@ -8,97 +11,44 @@ import Despesas from './pages/Despesas'
 import Votacoes from './pages/Votacoes'
 import Ocorrencias from './pages/Ocorrencias'
 import Comunicados from './pages/Comunicados'
+import Layout from './components/Layout'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+// Componente de Rota Privada
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth()
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 mt-4">Carregando...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>
+  
+  if (!session) {
+    return <Navigate to="/login" />
   }
 
   return <>{children}</>
 }
 
-function App() {
-  const { user } = useAuth()
-
+export default function App() {
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/" replace /> : <Login />}
-      />
-      <Route
-        path="/signup"
-        element={user ? <Navigate to="/" replace /> : <Signup />}
-      />
+    <Router>
+      <AuthProvider>
+        {/* ThemeProvider DEVE estar dentro do AuthProvider para acessar o usuário */}
+        <ThemeProvider>
+          <Routes>
+            {/* Rotas Públicas */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
 
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/faq"
-        element={
-          <ProtectedRoute>
-            <FAQ />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/despesas"
-        element={
-          <ProtectedRoute>
-            <Despesas />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/votacoes"
-        element={
-          <ProtectedRoute>
-            <Votacoes />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/ocorrencias"
-        element={
-          <ProtectedRoute>
-            <Ocorrencias />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/comunicados"
-        element={
-          <ProtectedRoute>
-            <Comunicados />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Catch all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+            {/* Rotas Privadas com Layout */}
+            <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/despesas" element={<Despesas />} />
+              <Route path="/votacoes" element={<Votacoes />} />
+              <Route path="/ocorrencias" element={<Ocorrencias />} />
+              <Route path="/comunicados" element={<Comunicados />} />
+            </Route>
+          </Routes>
+        </ThemeProvider>
+      </AuthProvider>
+    </Router>
   )
 }
-
-export default App

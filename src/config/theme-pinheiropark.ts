@@ -1,62 +1,44 @@
 // src/config/theme-pinheiropark.ts
-/**
- * TEMA PINHEIRO PARK
- * Sistema de cores e tipografia personalizado
- * 
- * Baseado na identidade visual do condomínio:
- * - Verde Jade como cor principal (natureza, comunidade)
- * - Tons de verde complementares
- * - Marrom terra como acento
- */
 
 export const pinheiroParkTheme = {
-  // Informações do condomínio
   name: 'Pinheiro Park',
   slug: 'pinheiropark',
   fullName: 'Condomínio Pinheiro Park',
   
-  // Cores principais
   colors: {
     primary: {
-      DEFAULT: '#00A86B',    // Verde Jade - Tom principal
-      dark: '#00724E',       // Verde Escuro - Hover/destaque
-      light: '#00D68F',      // Verde Claro - CTAs/badges
+      DEFAULT: '#00A86B',
+      dark: '#00724E',
+      light: '#00D68F',
       50: '#E6F7F1',
       100: '#CCEFE3',
       200: '#99DFC7',
       300: '#66CFAB',
       400: '#33BF8F',
-      500: '#00A86B',         // PRIMARY
+      500: '#00A86B',
       600: '#008656',
       700: '#006541',
       800: '#00432B',
       900: '#002216',
     },
-    
     secondary: {
-      DEFAULT: '#2E7D6E',    // Verde Petróleo - Acentos
+      DEFAULT: '#2E7D6E',
       dark: '#1F5349',
       light: '#3D9A88',
     },
-    
     accent: {
-      DEFAULT: '#00D68F',    // Verde Claro - CTAs/badges
+      DEFAULT: '#00D68F',
       hover: '#00B578',
     },
-    
     brown: {
-      DEFAULT: '#6B4423',    // Marrom Terra - Complementar
+      DEFAULT: '#6B4423',
       light: '#00A86B',
       dark: '#4A2F18',
     },
-    
-    // Cores funcionais (mantidas para consistência)
-    success: '#00A86B',      // Reutiliza o verde principal
-    warning: '#F59E0B',      // Mantém (não conflita)
-    danger: '#EF4444',       // Mantém (não conflita)
-    info: '#2E7D6E',         // Verde petróleo
-    
-    // Cores neutras (cinzas)
+    success: '#00A86B',
+    warning: '#F59E0B',
+    danger: '#EF4444',
+    info: '#2E7D6E',
     gray: {
       50: '#F9FAFB',
       100: '#F3F4F6',
@@ -69,48 +51,39 @@ export const pinheiroParkTheme = {
       800: '#1F2937',
       900: '#111827',
     },
-    
-    // Backgrounds
     background: {
       DEFAULT: '#FFFFFF',
       secondary: '#F9FAFB',
       tertiary: '#F3F4F6',
     },
-    
-    // Textos
     text: {
       primary: '#111827',
       secondary: '#6B7280',
       tertiary: '#9CA3AF',
       inverse: '#FFFFFF',
     },
-    
-    // Bordas
     border: {
       DEFAULT: '#E5E7EB',
       focus: '#00A86B',
     },
   },
   
-  // Tipografia
   typography: {
     fontFamily: {
-      sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+      sans: ['Inter', 'system-ui', 'sans-serif'],
       display: ['Poppins', 'Inter', 'sans-serif'],
-      mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+      mono: ['JetBrains Mono', 'monospace'],
     },
-    
     fontSize: {
-      xs: ['0.75rem', { lineHeight: '1rem' }],      // 12px
-      sm: ['0.875rem', { lineHeight: '1.25rem' }],  // 14px
-      base: ['1rem', { lineHeight: '1.5rem' }],     // 16px
-      lg: ['1.125rem', { lineHeight: '1.75rem' }],  // 18px
-      xl: ['1.25rem', { lineHeight: '1.75rem' }],   // 20px
-      '2xl': ['1.5rem', { lineHeight: '2rem' }],    // 24px
-      '3xl': ['1.875rem', { lineHeight: '2.25rem' }], // 30px
-      '4xl': ['2.25rem', { lineHeight: '2.5rem' }], // 36px
+      xs: ['0.75rem', { lineHeight: '1rem' }],
+      sm: ['0.875rem', { lineHeight: '1.25rem' }],
+      base: ['1rem', { lineHeight: '1.5rem' }],
+      lg: ['1.125rem', { lineHeight: '1.75rem' }],
+      xl: ['1.25rem', { lineHeight: '1.75rem' }],
+      '2xl': ['1.5rem', { lineHeight: '2rem' }],
+      '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+      '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
     },
-    
     fontWeight: {
       normal: '400',
       medium: '500',
@@ -119,20 +92,18 @@ export const pinheiroParkTheme = {
     },
   },
   
-  // Espaçamentos
   spacing: {
-    page: '1.5rem',      // Padding padrão das páginas
-    card: '1.25rem',     // Padding interno dos cards
-    section: '2rem',     // Espaçamento entre seções
+    page: '1.5rem',
+    card: '1.25rem',
+    section: '2rem',
   },
   
-  // Bordas e sombras
   borderRadius: {
-    sm: '0.375rem',      // 6px
-    DEFAULT: '0.5rem',   // 8px
-    md: '0.75rem',       // 12px
-    lg: '1rem',          // 16px
-    xl: '1.5rem',        // 24px
+    sm: '0.375rem',
+    DEFAULT: '0.5rem',
+    md: '0.75rem',
+    lg: '1rem',
+    xl: '1.5rem',
     full: '9999px',
   },
   
@@ -146,21 +117,18 @@ export const pinheiroParkTheme = {
     none: 'none',
   },
   
-  // Transições
   transitions: {
     fast: '150ms ease-in-out',
     base: '200ms ease-in-out',
     slow: '300ms ease-in-out',
   },
   
-  // Gradientes específicos do Pinheiro Park
   gradients: {
     primary: 'linear-gradient(135deg, #00A86B 0%, #2E7D6E 100%)',
     header: 'linear-gradient(135deg, #00724E 0%, #00A86B 100%)',
     card: 'linear-gradient(135deg, rgba(0, 168, 107, 0.05) 0%, rgba(46, 125, 110, 0.05) 100%)',
   },
   
-  // Configurações de módulos
   modules: {
     faq: {
       categories: {
@@ -171,7 +139,6 @@ export const pinheiroParkTheme = {
         areas_comuns: { label: 'Áreas Comuns', icon: '🏊', color: 'cyan' },
       },
     },
-    
     despesas: {
       categories: {
         manutencao: { label: 'Manutenção', icon: '🔧', color: 'orange' },
@@ -181,7 +148,6 @@ export const pinheiroParkTheme = {
         seguranca: { label: 'Segurança', icon: '🛡️', color: 'red' },
       },
     },
-    
     ocorrencias: {
       statuses: {
         aberta: { label: 'Aberta', icon: '🔴', color: 'red' },
@@ -191,7 +157,6 @@ export const pinheiroParkTheme = {
         arquivada: { label: 'Arquivada', icon: '⚫', color: 'gray' },
       },
     },
-    
     comunicados: {
       priorities: {
         baixa: { label: 'Baixa', icon: '📌', color: 'gray' },
@@ -202,11 +167,10 @@ export const pinheiroParkTheme = {
     },
   },
   
-  // Configurações específicas do condomínio
   condominium: {
     totalUnits: 120,
-    structure: 'horizontal',  // horizontal | vertical
-    type: 'casas',           // casas | apartamentos
+    structure: 'horizontal',
+    type: 'casas',
     blocks: [
       { id: 1, name: 'Bloco A', units: 30, type: 'duplex' },
       { id: 2, name: 'Bloco B', units: 30, type: 'duplex' },
@@ -223,33 +187,25 @@ export const pinheiroParkTheme = {
     ],
   },
   
-  // Branding
   branding: {
     logoUrl: '/assets/logos/pinheiro-park.svg',
     logoWhiteUrl: '/assets/logos/pinheiro-park-white.svg',
     poweredByUrl: '/assets/logos/condomix-badge.svg',
     favicon: '/favicon-pinheiropark.ico',
-    
-    // Metadados
     meta: {
       title: 'Pinheiro Park - Gestão Inteligente',
-      description: 'Sistema de gestão condominial do Pinheiro Park. Transparência, participação e eficiência.',
-      keywords: ['condomínio', 'gestão', 'pinheiro park', 'teresina', 'transparência'],
+      description: 'Sistema de gestão condominial do Pinheiro Park.',
+      keywords: ['condomínio', 'gestão', 'pinheiro park'],
     },
-    
-    // Redes sociais (futuro)
     social: {
       instagram: '',
       facebook: '',
       whatsapp: '',
     },
   },
-};
+}
 
-// Exportar como default para facilitar importação
-export default pinheiroParkTheme;
+export default pinheiroParkTheme
 
-// Type-safe exports
-export type Theme = typeof pinheiroParkTheme;
-export type ColorPalette = typeof pinheiroParkTheme.colors;
-export type Typography = typeof pinheiroParkTheme.typography;
+// TIPO EXPORTADO EXPLICITAMENTE PARA CORRIGIR O ERRO
+export type Theme = typeof pinheiroParkTheme
