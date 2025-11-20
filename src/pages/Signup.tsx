@@ -90,7 +90,7 @@ export default function Signup() {
             alt="Versix Meu Condominio"
             className="w-40 h-auto mx-auto mb-4"
           />
-          <h1 className="text-3xl font-bold text-gray-900">Meu Condomínio</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Meu Condominio</h1>
           <p className="text-gray-600 mt-2">Crie sua conta de morador</p>
         </div>
 
