@@ -13,7 +13,7 @@ export default function Layout() {
 
   const isActive = (path: string) => location.pathname === path
 
-  // Itens de navegação para DESKTOP (Todos visíveis)
+  // Itens de navegação para DESKTOP (Agora inclui Perfil)
   const desktopNavItems = [
     { path: '/', label: 'Dashboard', icon: '🏠' },
     { path: '/faq', label: 'FAQ', icon: '❓' },
@@ -21,15 +21,15 @@ export default function Layout() {
     { path: '/votacoes', label: 'Votações', icon: '🗳️', badge: stats.votacoes.ativas },
     { path: '/ocorrencias', label: 'Ocorrências', icon: '🚨', badge: stats.ocorrencias.abertas },
     { path: '/comunicados', label: 'Comunicados', icon: '📢', badge: stats.comunicados.nao_lidos },
+    { path: '/perfil', label: 'Perfil', icon: '👤' }, // Adicionado aqui
   ]
 
-  // Itens de navegação para MOBILE (5 itens, substituindo Ocorrências por Perfil)
+  // Itens de navegação para MOBILE (5 itens principais para caber na barra)
   const mobileNavItems = [
     { path: '/', label: 'Início', icon: '🏠' },
     { path: '/faq', label: 'FAQ', icon: '❓' },
     { path: '/despesas', label: 'Despesas', icon: '💰' },
     { path: '/votacoes', label: 'Votações', icon: '🗳️', badge: stats.votacoes.ativas },
-    // SUBSTITUIÇÃO SOLICITADA: Ocorrências -> Perfil
     { path: '/perfil', label: 'Perfil', icon: '👤' }, 
   ]
 
@@ -67,13 +67,13 @@ export default function Layout() {
               </div>
             </Link>
 
-            {/* Desktop Nav - Usa a lista completa */}
-            <nav className="hidden md:flex items-center gap-1">
+            {/* Desktop Nav - Usa a lista completa com Perfil */}
+            <nav className="hidden lg:flex items-center gap-1">
               {desktopNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`relative px-4 py-2 rounded-lg font-medium text-sm transition duration-200 flex items-center gap-2 ${
+                  className={`relative px-3 py-2 rounded-lg font-medium text-sm transition duration-200 flex items-center gap-2 ${
                     isActive(item.path) 
                       ? 'bg-white/20 text-white shadow-inner' 
                       : 'hover:bg-white/10 text-white/90'
@@ -90,7 +90,7 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* User Menu Desktop (Redireciona para perfil ao clicar no nome) */}
+            {/* User Menu Desktop */}
             <div className="flex items-center gap-3">
               <Link to="/perfil" className="hidden md:block text-right hover:opacity-80 transition">
                 <p className="text-sm font-bold leading-tight">{profile?.full_name?.split(' ')[0]}</p>
@@ -112,7 +112,7 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Mobile Bottom Nav - Usa a lista mobile (com Perfil) */}
+      {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe safe-area-pb">
         <div className="grid grid-cols-5 gap-1 p-2">
           {mobileNavItems.map((item) => {
