@@ -16,152 +16,154 @@ interface DashboardUpdate {
   color: string
   bgColor: string
   link: string
-  isPinned?: boolean // Para comunicados urgentes
+  isPinned?: boolean
 }
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { stats, loading: loadingStats } = useDashboardStats()
+  const { stats } = useDashboardStats()
   const [updates, setUpdates] = useState<DashboardUpdate[]>([])
   const [loadingUpdates, setLoadingUpdates] = useState(true)
 
   useEffect(() => {
-    loadUnifiedFeed()
+    if (profile?.id) {
+      loadUnifiedFeed()
+    }
   }, [profile?.id])
 
-  // Função central que busca dados de todas as tabelas e unifica em uma timeline
   async function loadUnifiedFeed() {
-    try {
-      setLoadingUpdates(true)
+    setLoadingUpdates(true)
+    const newUpdates: DashboardUpdate[] = []
 
-      // 1. Buscar Comunicados Recentes (Limit 5)
-      const { data: comunicados } = await supabase
-        .from('comunicados')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      // 2. Buscar Despesas Recentes (Limit 5)
-      const { data: despesas } = await supabase
-        .from('despesas')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      // 3. Buscar Ocorrências Recentes (Limit 5)
-      const { data: ocorrencias } = await supabase
-        .from('ocorrencias')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      // 4. Buscar Votações Recentes (Limit 3)
-      const { data: votacoes } = await supabase
-        .from('votacoes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(3)
-
-      // 5. Buscar FAQs Recentes (Limit 3)
-      const { data: faqs } = await supabase
-        .from('faqs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(3)
-
-      // Normalizar dados para o formato DashboardUpdate
-      const normalizedUpdates: DashboardUpdate[] = []
-
-      comunicados?.forEach(c => {
-        const isUrgent = c.priority === 'urgente' || c.type === 'urgente'
-        normalizedUpdates.push({
-          id: `com-${c.id}`,
-          type: 'comunicado',
-          title: isUrgent ? `COMUNICADO URGENTE: ${c.title}` : c.title,
-          description: c.content.substring(0, 100) + (c.content.length > 100 ? '...' : ''),
-          date: c.created_at,
-          icon: isUrgent ? '📢' : '📌',
-          color: isUrgent ? 'text-red-600' : 'text-blue-600',
-          bgColor: isUrgent ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100',
-          link: '/comunicados',
-          isPinned: isUrgent
-        })
-      })
-
-      despesas?.forEach(d => {
-        normalizedUpdates.push({
-          id: `desp-${d.id}`,
-          type: 'despesa',
-          title: 'Nova Despesa Registrada',
-          description: `${d.description} - ${formatCurrency(d.amount)}`,
-          date: d.created_at,
-          icon: '💰',
-          color: 'text-green-600',
-          bgColor: 'bg-white border-gray-100',
-          link: '/despesas'
-        })
-      })
-
-      ocorrencias?.forEach(o => {
-        normalizedUpdates.push({
-          id: `oco-${o.id}`,
-          type: 'ocorrencia',
-          title: `Atualização em Ocorrência: ${o.status.replace('_', ' ')}`,
-          description: o.title,
-          date: o.updated_at || o.created_at,
-          icon: '🚨',
-          color: 'text-orange-600',
-          bgColor: 'bg-white border-gray-100',
-          link: '/ocorrencias'
-        })
-      })
-
-      votacoes?.forEach(v => {
-        const isActive = new Date(v.end_date) > new Date()
-        normalizedUpdates.push({
-          id: `vot-${v.id}`,
-          type: 'votacao',
-          title: isActive ? 'Nova Votação Iniciada' : 'Votação Encerrada',
-          description: v.title,
-          date: v.created_at,
-          icon: '🗳️',
-          color: 'text-purple-600',
-          bgColor: 'bg-purple-50 border-purple-100',
-          link: '/votacoes'
-        })
-      })
-
-      faqs?.forEach(f => {
-        normalizedUpdates.push({
-          id: `faq-${f.id}`,
-          type: 'faq',
-          title: 'Nova Pergunta Respondida',
-          description: f.question,
-          date: f.created_at,
-          icon: '❓',
-          color: 'text-cyan-600',
-          bgColor: 'bg-white border-gray-100',
-          link: '/faq'
-        })
-      })
-
-      // Ordenar por data (mais recente primeiro) e prioridade (pinned primeiro)
-      const sorted = normalizedUpdates.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1
-        if (!a.isPinned && b.isPinned) return 1
-        return new Date(b.date).getTime() - new Date(a.date).getTime()
-      })
-
-      setUpdates(sorted.slice(0, 20)) // Pegar apenas os 20 últimos eventos
-    } catch (error) {
-      console.error('Erro ao carregar feed:', error)
-    } finally {
-      setLoadingUpdates(false)
+    // Função auxiliar para buscar dados com tratamento de erro individual
+    const fetchData = async (table: string, queryBuilder: any) => {
+      try {
+        const { data, error } = await queryBuilder
+        if (error) {
+          console.error(`Erro ao buscar ${table}:`, error.message)
+          return []
+        }
+        return data
+      } catch (err) {
+        console.error(`Exceção ao buscar ${table}:`, err)
+        return []
+      }
     }
+
+    // Buscas individuais
+    // 1. Comunicados - CORREÇÃO: Usar 'published_at' em vez de 'created_at'
+    const comunicados = await fetchData('comunicados', 
+      supabase.from('comunicados').select('*').order('published_at', { ascending: false }).limit(5)
+    )
+
+    // 2. Despesas
+    const despesas = await fetchData('despesas', 
+      supabase.from('despesas').select('*').order('created_at', { ascending: false }).limit(5)
+    )
+
+    // 3. Ocorrências
+    const ocorrencias = await fetchData('ocorrencias', 
+      supabase.from('ocorrencias').select('*').order('created_at', { ascending: false }).limit(5)
+    )
+
+    // 4. Votações
+    const votacoes = await fetchData('votacoes', 
+      supabase.from('votacoes').select('*').order('created_at', { ascending: false }).limit(3)
+    )
+
+    // 5. FAQs
+    const faqs = await fetchData('faqs', 
+      supabase.from('faqs').select('*').order('created_at', { ascending: false }).limit(3)
+    )
+
+    // Processamento dos dados
+    comunicados?.forEach((c: any) => {
+      const isUrgent = c.priority === 'urgente' || c.type === 'urgente'
+      newUpdates.push({
+        id: `com-${c.id}`,
+        type: 'comunicado',
+        title: isUrgent ? `COMUNICADO URGENTE: ${c.title}` : c.title,
+        description: c.content,
+        // CORREÇÃO: Usar 'published_at' aqui também
+        date: c.published_at, 
+        icon: isUrgent ? '📢' : '📌',
+        color: isUrgent ? 'text-red-600' : 'text-blue-600',
+        bgColor: isUrgent ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100',
+        link: '/comunicados',
+        isPinned: isUrgent
+      })
+    })
+
+    despesas?.forEach((d: any) => {
+      newUpdates.push({
+        id: `desp-${d.id}`,
+        type: 'despesa',
+        title: 'Nova Despesa Registrada',
+        description: `${d.description} - ${formatCurrency(d.amount)}`,
+        date: d.created_at,
+        icon: '💰',
+        color: 'text-green-600',
+        bgColor: 'bg-white border-gray-100',
+        link: '/despesas'
+      })
+    })
+
+    ocorrencias?.forEach((o: any) => {
+      newUpdates.push({
+        id: `oco-${o.id}`,
+        type: 'ocorrencia',
+        title: `Atualização em Ocorrência`,
+        description: o.title,
+        date: o.updated_at || o.created_at,
+        icon: '🚨',
+        color: 'text-orange-600',
+        bgColor: 'bg-white border-gray-100',
+        link: '/ocorrencias'
+      })
+    })
+
+    votacoes?.forEach((v: any) => {
+      const isActive = new Date(v.end_date) > new Date()
+      newUpdates.push({
+        id: `vot-${v.id}`,
+        type: 'votacao',
+        title: isActive ? 'Nova Votação Iniciada' : 'Votação Encerrada',
+        description: v.title,
+        date: v.created_at,
+        icon: '🗳️',
+        color: 'text-purple-600',
+        bgColor: 'bg-purple-50 border-purple-100',
+        link: '/votacoes'
+      })
+    })
+
+    faqs?.forEach((f: any) => {
+      newUpdates.push({
+        id: `faq-${f.id}`,
+        type: 'faq',
+        title: 'Nova Pergunta Respondida',
+        description: f.question,
+        date: f.created_at,
+        icon: '❓',
+        color: 'text-cyan-600',
+        bgColor: 'bg-white border-gray-100',
+        link: '/faq'
+      })
+    })
+
+    const sorted = newUpdates.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1
+      if (!a.isPinned && b.isPinned) return 1
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+
+    setUpdates(sorted.slice(0, 20))
+    setLoadingUpdates(false)
   }
 
   function formatTimeAgo(dateString: string) {
+    if (!dateString) return '' // Proteção contra data nula
     const diff = new Date().getTime() - new Date(dateString).getTime()
     const minutes = Math.floor(diff / 60000)
     const hours = Math.floor(diff / 3600000)
@@ -175,10 +177,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* NOTA: O Header e a Navegação Mobile foram removidos daqui 
-          pois já estão presentes no arquivo Layout.tsx que envolve esta página.
-      */}
-
       {/* Saudação */}
       <div className="mb-6">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
@@ -187,7 +185,7 @@ export default function Dashboard() {
         <p className="text-gray-600">Bem-vindo ao seu painel de gestão condominial</p>
       </div>
 
-      {/* Stats Cards com Rolagem Horizontal no Mobile */}
+      {/* Stats Cards */}
       <div className="
         flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4 mb-6
         md:grid md:grid-cols-4 md:overflow-visible md:pb-0 md:snap-none
@@ -244,7 +242,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Feed Unificado: Últimas Atualizações */}
+      {/* Últimas Atualizações */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -276,7 +274,7 @@ export default function Dashboard() {
                     ${item.isPinned ? 'bg-yellow-50/50 hover:bg-yellow-50' : ''}
                   `}
                 >
-                  {/* Linha do tempo vertical */}
+                  {/* Linha vertical (Desktop) */}
                   <div className="absolute left-[2rem] top-0 bottom-0 w-px bg-gray-100 -z-10 md:block hidden"></div>
 
                   {/* Ícone */}

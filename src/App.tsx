@@ -28,9 +28,9 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Router>
+    // Adicionando as flags futuras para limpar o console
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
-        {/* ThemeProvider DEVE estar dentro do AuthProvider para acessar o usuário */}
         <ThemeProvider>
           <Routes>
             {/* Rotas Públicas */}

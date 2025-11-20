@@ -3,7 +3,7 @@ import { AuthContext } from './AuthContext'
 import { supabase } from '../lib/supabase'
 
 import pinheiroParkTheme from '../config/theme-pinheiropark'
-// CORREÇÃO: Usar 'import type' previne o erro de SyntaxError no navegador
+// Importação de tipo separada
 import type { Theme } from '../config/theme-pinheiropark'
 import versixTheme from '../config/theme-versix'
 
@@ -16,7 +16,6 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Usamos o contexto diretamente para maior segurança
   const auth = useContext(AuthContext)
   
   const [currentTheme, setCurrentTheme] = useState<Theme>(versixTheme)
@@ -24,7 +23,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function loadTheme() {
-      // Se o usuário não estiver logado ou contexto não carregou, mantém tema padrão
       if (!auth || !auth.user || !auth.profile?.condominio_id) {
         setCurrentTheme(versixTheme)
         setLoading(false)
@@ -35,21 +33,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setLoading(true)
         const { data, error } = await supabase
           .from('condominios')
-          .select('slug, theme_config')
+          .select('slug, name, theme_config')
           .eq('id', auth.profile.condominio_id)
           .single()
 
         if (error) throw error
 
-        switch (data?.slug) {
-          case 'pinheiropark':
-            setCurrentTheme(pinheiroParkTheme)
-            break
-          case 'versix':
-          default:
-            setCurrentTheme(versixTheme)
-            break
+        // Normalizar strings para comparação segura (remove espaços e caixa alta)
+        const slug = data?.slug?.toLowerCase().replace(/\s/g, '') || ''
+        const name = data?.name?.toLowerCase() || ''
+
+        console.log('Carregando tema para:', { slug, name }) // Debug
+
+        // Lógica de Seleção de Tema Mais Robusta
+        if (slug.includes('pinheiro') || name.includes('pinheiro')) {
+          setCurrentTheme(pinheiroParkTheme)
+        } else if (slug === 'versix') {
+          setCurrentTheme(versixTheme)
+        } else {
+          // Default Fallback
+          setCurrentTheme(versixTheme)
         }
+        
       } catch (err) {
         console.error('Erro ao carregar tema:', err)
         setCurrentTheme(versixTheme)
@@ -62,7 +67,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [auth?.user, auth?.profile?.condominio_id])
 
   const toggleTheme = () => {
-    console.log('Troca manual desativada em favor do tema do condomínio')
+    console.log('Troca manual desativada')
   }
 
   return (

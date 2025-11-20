@@ -9,7 +9,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
   const { stats } = useDashboardStats()
-  const { theme, loading } = useTheme() // Tema dinâmico carregado aqui
+  const { theme, loading } = useTheme()
 
   const isActive = (path: string) => location.pathname === path
 
@@ -29,7 +29,6 @@ export default function Layout() {
     }
   }
 
-  // Mostra spinner enquanto decide qual tema carregar
   if (loading) return <LoadingSpinner message="Carregando ambiente do condomínio..." />
 
   return (
@@ -43,28 +42,25 @@ export default function Layout() {
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3 group">
               {/* Logo Dinâmica */}
-              {theme.branding.logoWhiteUrl ? (
-                <img 
-                  src={theme.branding.logoWhiteUrl} 
-                  alt={theme.name} 
-                  className="h-10 w-auto object-contain transition-transform group-hover:scale-105" 
-                  onError={(e) => {
-                    // Fallback se a imagem não carregar
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-              ) : null}
-              
-              {/* Fallback visual caso não tenha logo */}
-              <div className={`w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm ${theme.branding.logoWhiteUrl ? 'hidden' : ''}`}>
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm">
+                {/* Ícone do prédio como fallback ou principal se não tiver logo */}
                 🏢
               </div>
               
               <div>
-                <h1 className="text-xl font-bold tracking-tight">{theme.name}</h1>
-                <p className="text-xs opacity-90 font-medium">
-                  {profile?.unit_number ? `Unidade ${profile.unit_number}` : 'Gestão Condominial'}
+                {/* Título Fixo conforme solicitado */}
+                <h1 className="text-lg md:text-xl font-bold tracking-tight leading-tight">
+                  Versix Meu Condomínio
+                </h1>
+                
+                {/* Subtítulo com Nome do Condomínio + Unidade */}
+                <p className="text-xs opacity-90 font-medium flex flex-col md:flex-row md:gap-1">
+                  <span className="font-bold text-white">
+                    {profile?.condominio_name || 'Carregando condomínio...'}
+                  </span>
+                  {profile?.unit_number && (
+                    <span className="hidden md:inline opacity-60">• Unidade {profile.unit_number}</span>
+                  )}
                 </p>
               </div>
             </Link>
@@ -114,7 +110,7 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Mobile Bottom Nav com Cores Dinâmicas */}
+      {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe safe-area-pb">
         <div className="grid grid-cols-5 gap-1 p-2">
           {navItems.slice(0, 5).map((item) => {
