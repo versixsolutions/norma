@@ -75,7 +75,7 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
       setMessages([
         {
           id: 'welcome',
-          text: `${greeting}, ${firstName}, tudo bem? \n\nMe chamo **Ísis**, sua assistente virtual da Versix, e estou aqui para ajudá-lo. 😊\n\nVocê pode digitar sua dúvida ou escolher um dos temas abaixo para começarmos:`,
+          text: `${greeting}, ${firstName}, tudo bem? \n\nMe chamo **Ísis**, assistente virtual da Versix, e estou aqui para ajudá-lo. 😊\n\nVocê pode digitar sua dúvida ou escolher um dos temas abaixo para começarmos:`,
           sender: 'bot',
           timestamp: new Date(),
           options: categoryOptions

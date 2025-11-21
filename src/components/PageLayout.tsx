@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 
 interface PageLayoutProps {
@@ -20,24 +19,25 @@ export default function PageLayout({
   showBackButton = true,
 }: PageLayoutProps) {
   const navigate = useNavigate()
-  const { profile, signOut } = useAuth()
-  const { theme } = useTheme() // Tema dinâmico
+  const { theme } = useTheme()
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-6">
-      {/* Header Interno - Usa o gradiente do tema */}
+      {/* Header Interno */}
       <header 
         className="text-white shadow-lg sticky top-0 z-40 transition-all duration-500"
         style={{ background: theme.gradients.header }}
       >
         <div className="max-w-5xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
+            
+            {/* Lado Esquerdo: Voltar + Títulos */}
             <div className="flex items-center gap-3">
               {showBackButton && (
                 <button
                   onClick={() => navigate('/')}
                   className="p-2 hover:bg-white/20 rounded-lg transition"
-                  aria-label="Voltar"
+                  aria-label="Voltar ao Início"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -53,31 +53,25 @@ export default function PageLayout({
               </div>
             </div>
 
-            <div className="hidden md:flex items-center gap-4">
-              <div className="text-right">
-                <p className="font-semibold text-sm">{profile?.full_name}</p>
-                <p className="text-xs text-white/80 uppercase font-bold tracking-wider">
-                  {profile?.role === 'sindico' ? '👑 Síndico' : '🏠 Morador'}
-                </p>
+            {/* Lado Direito: Ações da Página (Desktop) */}
+            {/* Removemos o perfil/logout daqui e colocamos a ação principal da página no lugar */}
+            {headerAction && (
+              <div className="hidden md:block animate-fade-in">
+                {headerAction}
               </div>
-              <button
-                onClick={signOut}
-                className="bg-white/20 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-white/30 transition backdrop-blur-sm"
-              >
-                Sair
-              </button>
-            </div>
+            )}
           </div>
 
+          {/* Ações da Página (Mobile - Aparece abaixo do título) */}
           {headerAction && (
-            <div className="mt-4 animate-slide-down">
+            <div className="mt-4 md:hidden animate-slide-down">
               {headerAction}
             </div>
           )}
         </div>
       </header>
 
-      {/* Content */}
+      {/* Conteúdo da Página */}
       <main className="max-w-5xl mx-auto px-4 py-6 animate-fade-in">
         {children}
       </main>
