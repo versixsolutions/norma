@@ -22,7 +22,7 @@ export default function Layout() {
     { path: '/', label: 'Dashboard', icon: '🏠' },
     { path: '/comunicacao', label: 'Comunicação', icon: '📢' },
     { path: '/suporte', label: 'Suporte', icon: '🤝' },
-    { path: '/transparencia', label: 'Transparência', icon: '💰' }, // Ícone atualizado
+    { path: '/transparencia', label: 'Transparência', icon: '💰' },
     { path: '/perfil', label: 'Perfil', icon: '👤' },
   ]
 
@@ -66,9 +66,13 @@ export default function Layout() {
               </button>
 
               <Link to="/" className="flex items-center gap-3 group">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-2xl backdrop-blur-sm">
-                  🏢
-                </div>
+                {/* LOGO ALTERADA AQUI - Mesma do Login */}
+                <img 
+                  src="/assets/logos/versix-solutions-logo.png" 
+                  alt="Versix Meu Condomínio" 
+                  className="h-10 w-auto bg-white rounded-md p-1 shadow-sm object-contain"
+                />
+                
                 <div>
                   <h1 className="text-lg md:text-xl font-bold tracking-tight leading-tight">
                     Versix Meu Condomínio
@@ -105,13 +109,11 @@ export default function Layout() {
       </header>
 
       {/* SIDEBAR (Drawer) - Apenas Desktop */}
-      {/* Overlay Escuro */}
       <div 
         className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 md:block hidden ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsSidebarOpen(false)}
       />
 
-      {/* Painel Lateral */}
       <aside 
         className={`fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out md:block hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
