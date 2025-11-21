@@ -90,9 +90,13 @@ export default function Ocorrencias() {
         </button>
       }
     >
-      {/* --- 1. CARDS DE RESUMO (PADRÃO ÚNICO) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      {/* --- 1. CARDS DE RESUMO (Layout Scrollável Horizontal no Mobile) --- */}
+      <div className="
+        flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4 mb-6
+        md:grid md:grid-cols-3 md:overflow-visible md:pb-0 md:snap-none
+        scrollbar-hide
+      ">
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Novas / Abertas</p>
           <div className="flex items-end justify-between">
             <p className="text-3xl font-bold text-blue-600">{stats.abertas}</p>
@@ -100,7 +104,7 @@ export default function Ocorrencias() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Em Andamento</p>
           <div className="flex items-end justify-between">
             <p className="text-3xl font-bold text-orange-500">{stats.em_andamento}</p>
@@ -108,7 +112,7 @@ export default function Ocorrencias() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Resolvidas (Total)</p>
           <div className="flex items-end justify-between">
             <p className="text-3xl font-bold text-green-600">{stats.resolvidas}</p>
