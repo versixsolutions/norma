@@ -19,31 +19,30 @@ import NovoChamado from './pages/NovoChamado'
 import Comunicacao from './pages/Comunicacao'
 import Biblioteca from './pages/Biblioteca'
 import Layout from './components/Layout'
-import PendingApproval from './pages/PendingApproval' // Importação Nova
+import PendingApproval from './pages/PendingApproval'
 
 // Pages Admin
 import AdminLayout from './components/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserManagement from './pages/admin/UserManagement'
+import OcorrenciasManagement from './pages/admin/OcorrenciasManagement' // Importação Nova
+import ComunicadosManagement from './pages/admin/ComunicadosManagement' // Importação Nova
 
-// Componente de Proteção de Rota (Lógica Atualizada)
+// Componente de Proteção de Rota
 function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
   const { session, loading, profile, canManage } = useAuth()
   const location = useLocation()
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>
   
-  // 1. Não autenticado -> Login
   if (!session) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  // 2. Usuário Pendente -> Tela de Espera (Se tentar acessar qualquer outra coisa)
   if (profile?.role === 'pending') {
     return <Navigate to="/pending-approval" replace />
   }
 
-  // 3. Rota Admin mas sem permissão -> Dashboard Morador
   if (adminOnly && !canManage) {
     return <Navigate to="/" replace />
   }
@@ -51,15 +50,11 @@ function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNo
   return <>{children}</>
 }
 
-// Rota Específica para Tela de Espera (Lógica Inversa)
 function PendingRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile } = useAuth()
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>
-  
   if (!session) return <Navigate to="/login" replace />
-
-  // Se já foi aprovado, não deve ver a tela de espera -> Dashboard
   if (profile?.role !== 'pending') {
     return <Navigate to="/" replace />
   }
@@ -79,14 +74,14 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
 
-            {/* Rota de Espera (Sem Layout) */}
+            {/* Rota de Espera */}
             <Route path="/pending-approval" element={
               <PendingRoute>
                 <PendingApproval />
               </PendingRoute>
             } />
 
-            {/* Área do Morador (Protegida + Layout) */}
+            {/* Área do Morador */}
             <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/suporte" element={<Suporte />} />
@@ -105,13 +100,16 @@ export default function App() {
               <Route path="/despesas" element={<Navigate to="/transparencia" replace />} />
             </Route>
 
-            {/* Área Administrativa (Protegida + Admin Layout) */}
-            {/* Nota: O AdminLayout já faz verificação interna, mas o PrivateRoute reforça */}
+            {/* Área Administrativa */}
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="usuarios" element={<UserManagement />} />
-              <Route path="ocorrencias" element={<div className="p-8">Módulo de Ocorrências (Em breve)</div>} />
-              <Route path="comunicados" element={<div className="p-8">Módulo de Comunicados (Em breve)</div>} />
+              
+              {/* Rotas Implementadas */}
+              <Route path="ocorrencias" element={<OcorrenciasManagement />} />
+              <Route path="comunicados" element={<ComunicadosManagement />} />
+              
+              {/* Rotas Futuras */}
               <Route path="votacoes" element={<div className="p-8">Módulo de Votações (Em breve)</div>} />
               <Route path="financeiro" element={<div className="p-8">Módulo Financeiro (Em breve)</div>} />
               <Route path="ia" element={<div className="p-8">Treinamento de IA (Em breve)</div>} />
