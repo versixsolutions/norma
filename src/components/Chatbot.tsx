@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-// Tipos atualizados para suportar ações de navegação
 interface ChatOption {
   label: string
   value: string
-  type: 'category' | 'question' | 'action' // Adicionado 'action'
+  type: 'category' | 'question' | 'action'
 }
 
 interface Message {
@@ -25,23 +24,21 @@ interface ChatbotProps {
 }
 
 export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
-  const { profile } = useAuth()
-  const navigate = useNavigate() // Hook de navegação
+  const { profile, user } = useAuth()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
+  
+  // Para salvar a pergunta caso precise abrir chamado
   const [lastQuestion, setLastQuestion] = useState('')
 
-  // Auto-scroll
   useEffect(() => {
-    if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isOpen])
 
-  // Saudação Inicial
   useEffect(() => {
     if (isOpen && !initialized.current) {
       const hour = new Date().getHours()
@@ -54,8 +51,7 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
       setMessages([
         {
           id: '1',
-          // Saudação reformulada para deixar claro o funcionamento por palavras-chave
-          text: `${greeting}, ${name}! Sou o Chatbot do Pinheiro Park. 🤖\n\nMeu sistema funciona por **palavras-chave**. Para encontrar o que precisa, digite apenas a palavra principal (ex: "piscina", "obras", "mudança").`,
+          text: `${greeting}, ${name}! Sou a **Ísis**, sua assistente virtual. 🤖\n\nPosso tirar suas dúvidas sobre o condomínio. Pergunte sobre "obras", "mudança", "piscina" ou o que precisar!`,
           sender: 'bot',
           timestamp: new Date()
         }
@@ -64,62 +60,54 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
     }
   }, [isOpen, profile])
 
-  // Função para lidar com cliques nos botões (Categorias ou Ações de Erro)
-  function handleOptionClick(option: ChatOption) {
-    if (option.type === 'action') {
-      // Ações de navegação (Quando a IA não sabe a resposta)
-      if (option.value === 'chamado') {
-        // Se for abrir chamado, vamos implementar a lógica de abrir chamado aqui
-        createTicketFromChat()
-      } else if (option.value === 'suporte') {
-        onClose() // Fecha o chat
-        navigate('/suporte')
-      }
-      return
-    }
-    
-    // Se for apenas uma sugestão de texto, envia como mensagem
-    setInputText(option.label)
-    // Opcional: Auto-enviar ao clicar (descomente a linha abaixo)
-    // handleSendMessage(new Event('submit') as any, option.label)
-  }
-  
+  // Função de Abrir Chamado Direto
   async function createTicketFromChat() {
-    const name = profile?.full_name?.split(' ')[0] || 'Morador'
-    if (!profile?.id || !lastQuestion) return
-
+    if (!user || !lastQuestion) return
     setIsTyping(true)
     try {
       const { error } = await supabase.from('chamados').insert({
-        user_id: profile.id,
-        subject: 'Dúvida via Chatbot',
-        description: lastQuestion, // Usa a pergunta que falhou como descrição
+        user_id: user.id,
+        subject: 'Dúvida via Chatbot (Ísis)',
+        description: lastQuestion, 
         status: 'aberto'
       })
 
       if (error) throw error
 
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        text: `✅ **Chamado Aberto com Sucesso!**\n\nEnviei sua dúvida ("${lastQuestion}") para o painel do síndico. Assim que ele responder, você verá a notificação aqui no seu Dashboard.`,
-        sender: 'bot',
-        timestamp: new Date()
-      }])
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          text: `✅ **Chamado Aberto!**\n\nSua dúvida foi enviada para o síndico. Você receberá a resposta aqui no app.`,
+          sender: 'bot',
+          timestamp: new Date()
+        }])
+        setIsTyping(false)
+      }, 1000)
+
     } catch (err) {
       console.error(err)
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        text: 'Tive um erro ao criar o chamado. Por favor, tente novamente mais tarde.',
+        text: 'Erro ao criar chamado. Tente novamente.',
         sender: 'bot',
         timestamp: new Date(),
         isError: true
       }])
-    } finally {
       setIsTyping(false)
     }
   }
 
-  async function handleSendMessage(e: React.FormEvent, textOverride?: string) {
+  function handleOptionClick(option: ChatOption) {
+    if (option.type === 'action') {
+      if (option.value === 'chamado') createTicketFromChat()
+      else if (option.value === 'suporte') { onClose(); navigate('/suporte') }
+      return
+    }
+    // Se for categoria/sugestão, envia como texto
+    handleSendMessage(null, option.label)
+  }
+
+  async function handleSendMessage(e: React.FormEvent | null, textOverride?: string) {
     if (e) e.preventDefault()
     
     const textToSend = textOverride || inputText
@@ -128,7 +116,6 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
     const name = profile?.full_name?.split(' ')[0] || 'Morador'
     setLastQuestion(textToSend)
     
-    // 1. Mensagem do Usuário
     const newUserMsg: Message = {
       id: Date.now().toString(),
       text: textToSend,
@@ -141,9 +128,7 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
     setIsTyping(true)
 
     try {
-      // --- LÓGICA DE BUSCA (KEYWORD SEARCH) ---
-      
-      // 1. Busca no Regimento (Tabela Documents via RPC Search)
+      // --- BUSCA INTELIGENTE NO BANCO (RPC) ---
       const { data: docs, error } = await supabase.rpc('search_documents', {
         query_text: textToSend
       })
@@ -151,46 +136,25 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
       if (error) throw error
 
       let botResponse = ''
-      let hasFound = false
+      let isNotFound = false
 
       if (docs && docs.length > 0) {
-        // Encontrou no Regimento
-        hasFound = true
+        // Encontrou resposta relevante
         const doc = docs[0]
-        // Se a similaridade for muito baixa (< 0.1), consideramos que não achou
-        if (doc.similarity < 0.1) {
-             botResponse = `Não tenho certeza, mas talvez isso ajude:\n\n**${doc.title}**\n"${doc.content}"`
-             hasFound = false // Considera não encontrado para oferecer fallback
-        } else {
-             botResponse = `Encontrei isto no Regimento:\n\n**${doc.title}**\n"${doc.content}"`
-        }
+        botResponse = `Encontrei isto no Regimento:\n\n**${doc.title}**\n"${doc.content}"`
         
-        if (docs.length > 1 && hasFound) {
-           botResponse += `\n\nTambém encontrei sobre **${docs[1].title}** que pode ser útil.`
+        if (docs.length > 1) {
+           botResponse += `\n\nVeja também sobre: **${docs[1].title}**.`
         }
       } else {
-        // 2. Tentativa de Fallback: Busca nas FAQs (Tabela FAQs)
-        const { data: faqs } = await supabase
-          .from('faqs')
-          .select('answer')
-          .textSearch('question', `'${textToSend}'`, { config: 'portuguese' }) // Busca full text
-          .limit(1)
-          
-        if (faqs && faqs.length > 0) {
-          hasFound = true
-          botResponse = `Encontrei uma resposta no FAQ:\n\n${faqs[0].answer}`
-        }
-      }
-      
-      // Se não encontrou nada em lugar nenhum
-      if (!hasFound && !botResponse) {
-        botResponse = `Desculpe, ${name}, consultei o regimento e não encontrei uma regra específica para "${textToSend}".`
+        // Não encontrou
+        isNotFound = true
+        botResponse = `Desculpe, ${name}, não encontrei uma regra específica para "${textToSend}" nos documentos.`
       }
 
-      // Preparar botões de ação se não encontrou
-      const fallbackOptions: ChatOption[] | undefined = !hasFound ? [
-        { label: '🎫 Abrir Chamado', value: 'chamado', type: 'action' },
-        { label: '📞 Contatos', value: 'suporte', type: 'action' }
+      const options: ChatOption[] | undefined = isNotFound ? [
+        { label: '🎫 Enviar para o Síndico', value: 'chamado', type: 'action' },
+        { label: '📞 Ver Contatos', value: 'suporte', type: 'action' }
       ] : undefined
 
       setTimeout(() => {
@@ -199,26 +163,23 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
           text: botResponse,
           sender: 'bot',
           timestamp: new Date(),
-          options: fallbackOptions
+          options: options
         }])
         setIsTyping(false)
-      }, 600) 
+      }, 800)
 
     } catch (err) {
-      console.error('Erro na busca:', err)
-      
+      console.error('Erro chat:', err)
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        text: 'Minha conexão está instável agora. 😔\n\nMas você pode usar o menu abaixo para resolver seu problema:',
+        text: 'Tive um erro técnico. Deseja abrir um chamado?',
         sender: 'bot',
         timestamp: new Date(),
         isError: true,
-        options: [
-            { label: 'Ir para Suporte', value: 'suporte', type: 'action' }
-        ]
+        options: [{ label: 'Sim, abrir chamado', value: 'chamado', type: 'action' }]
       }])
       setIsTyping(false)
-    } 
+    }
   }
 
   if (!isOpen) return null
@@ -232,62 +193,31 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
             👩‍💻
           </div>
           <div>
-            <h3 className="font-bold text-sm">Chatbot Pinheiro Park</h3>
+            <h3 className="font-bold text-sm">Fale com a Ísis</h3>
             <p className="text-[10px] opacity-90 flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Online
             </p>
           </div>
         </div>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onClose(); }} 
-          className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded transition"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded transition">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 
-      {/* Área de Mensagens */}
+      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-          >
-            <div
-              className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
-                msg.sender === 'user'
-                  ? 'bg-primary text-white rounded-br-none'
-                  : msg.isError 
-                    ? 'bg-red-50 text-red-700 border border-red-200 rounded-bl-none'
-                    : 'bg-white text-gray-700 border border-gray-200 rounded-bl-none'
-              }`}
-            >
+          <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+            <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${msg.sender === 'user' ? 'bg-primary text-white rounded-br-none' : msg.isError ? 'bg-red-50 text-red-700 border border-red-200 rounded-bl-none' : 'bg-white text-gray-700 border border-gray-200 rounded-bl-none'}`}>
               <p className="whitespace-pre-line leading-relaxed">
-                {msg.text.split('**').map((part, i) => 
-                  i % 2 === 1 ? <strong key={i}>{part}</strong> : part
-                )}
+                {msg.text.split('**').map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part)}
               </p>
-              <p className={`text-[10px] mt-1 text-right ${msg.sender === 'user' ? 'text-white/70' : 'text-gray-400'}`}>
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
+              <p className={`text-[10px] mt-1 text-right ${msg.sender === 'user' ? 'text-white/70' : 'text-gray-400'}`}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-
-            {/* Renderiza Botões de Ação (Fallback) se houver */}
             {msg.options && (
               <div className="flex flex-wrap gap-2 mt-2 max-w-[90%] animate-fade-in">
                 {msg.options.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleOptionClick(opt)}
-                    className={`
-                      text-xs font-bold px-3 py-1.5 rounded-full transition shadow-sm border
-                      ${opt.type === 'action' 
-                        ? 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50' 
-                        : 'bg-white border-primary text-primary hover:bg-primary hover:text-white'}
-                    `}
-                  >
+                  <button key={opt.value} onClick={() => handleOptionClick(opt)} className={`text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm border flex items-center gap-2 ${opt.type === 'action' ? 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50' : 'bg-white border-primary text-primary hover:bg-primary hover:text-white'}`}>
                     {opt.label}
                   </button>
                 ))}
@@ -295,7 +225,6 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
             )}
           </div>
         ))}
-        
         {isTyping && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 p-3 rounded-2xl rounded-bl-none flex gap-1 items-center shadow-sm">
@@ -311,21 +240,9 @@ export default function Chatbot({ isOpen, onClose }: ChatbotProps) {
 
       {/* Input */}
       <form onSubmit={(e) => handleSendMessage(e)} className="p-3 bg-white border-t border-gray-100 flex gap-2">
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Digite uma palavra-chave..."
-          className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
-        />
-        <button
-          type="submit"
-          disabled={!inputText.trim() || isTyping}
-          className="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
-        >
-          <svg className="w-4 h-4 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
+        <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Digite sua dúvida..." className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" />
+        <button type="submit" disabled={!inputText.trim() || isTyping} className="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm">
+          <svg className="w-4 h-4 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
         </button>
       </form>
     </div>
