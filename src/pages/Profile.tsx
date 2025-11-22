@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { formatDateTime } from '../lib/utils'
+import { formatDateTime } from '../lib/utils' // Usaremos esta função agora
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 interface Activity {
   id: string
-  type: 'voto' | 'ocorrencia' | 'chamado' // Adicionado chamado
+  type: 'voto' | 'ocorrencia' | 'chamado'
   title: string
   description: string
   date: string
@@ -36,7 +36,7 @@ export default function Profile() {
       const { data: votos } = await supabase.from('votos').select(`id, vote, voted_at, votacao:votacao_id (title)`).eq('user_id', userId).order('voted_at', { ascending: false }).limit(10)
       // 2. Ocorrências
       const { data: ocorrencias } = await supabase.from('ocorrencias').select('*').eq('author_id', userId).order('created_at', { ascending: false }).limit(10)
-      // 3. Chamados (Tickets)
+      // 3. Chamados
       const { data: chamados } = await supabase.from('chamados').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)
 
       const myActivities: Activity[] = []
@@ -91,7 +91,11 @@ export default function Profile() {
                 {item.type === 'voto' ? '🗳️' : item.type === 'chamado' ? '🎫' : '🚨'}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start"><h4 className="font-bold text-gray-900 text-sm">{item.title}</h4><span className="text-xs text-gray-400 whitespace-nowrap ml-2">{new Date(item.date).toLocaleDateString('pt-BR')}</span></div>
+                <div className="flex justify-between items-start">
+                  <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
+                  {/* CORREÇÃO AQUI: Usando formatDateTime */}
+                  <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{formatDateTime(item.date)}</span>
+                </div>
                 <p className="text-sm text-gray-600 mt-1 line-clamp-2">{item.description}</p>
                 {item.status && <span className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-gray-100 text-gray-600`}>{item.status.replace('_', ' ')}</span>}
               </div>
@@ -101,6 +105,16 @@ export default function Profile() {
           <div className="text-center py-8 bg-white rounded-xl border border-gray-200 border-dashed"><p className="text-gray-500">Nenhuma atividade registrada recentemente.</p></div>
         )}
       </div>
+      
+      <div className="mt-6">
+          <button 
+            onClick={() => navigate('/ocorrencias')}
+            className="w-full py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-2"
+          >
+            <span>🚨</span> Acessar Todas as Ocorrências
+          </button>
+      </div>
+
     </PageLayout>
   )
 }
