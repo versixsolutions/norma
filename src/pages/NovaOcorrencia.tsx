@@ -16,7 +16,7 @@ const CATEGORIES = [
 
 export default function NovaOcorrencia() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile } = useAuth() // Pegamos o profile aqui
   const [loading, setLoading] = useState(false)
   
   const [formData, setFormData] = useState({
@@ -40,7 +40,11 @@ export default function NovaOcorrencia() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !profile?.condominio_id) {
+      alert('Erro: Perfil de usuário ou condomínio não identificado.')
+      return
+    }
+    
     setLoading(true)
 
     try {
@@ -53,12 +57,11 @@ export default function NovaOcorrencia() {
         const filePath = `${user.id}/${fileName}`
 
         const { error: uploadError } = await supabase.storage
-          .from('ocorrencias') // Certifique-se de criar este bucket no Supabase
+          .from('ocorrencias')
           .upload(filePath, selectedImage)
 
         if (uploadError) throw uploadError
 
-        // Obter URL pública
         const { data } = supabase.storage.from('ocorrencias').getPublicUrl(filePath)
         photoUrl = data.publicUrl
       }
@@ -67,16 +70,16 @@ export default function NovaOcorrencia() {
       const { error: insertError } = await supabase.from('ocorrencias').insert({
         title: formData.title,
         description: formData.description,
-        // category: formData.category, // Certifique-se de ter essa coluna no banco, senão adicione-a
+        category: formData.category,
         location: formData.location,
         status: 'aberto',
         photo_url: photoUrl,
         author_id: user.id,
+        condominio_id: profile.condominio_id // <--- VÍNCULO IMPORTANTE ADICIONADO
       })
 
       if (insertError) throw insertError
 
-      // Feedback visual simples (poderia ser um Toast)
       alert('Ocorrência registrada com sucesso!')
       navigate('/ocorrencias')
 
