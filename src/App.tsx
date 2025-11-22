@@ -25,8 +25,10 @@ import PendingApproval from './pages/PendingApproval'
 import AdminLayout from './components/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserManagement from './pages/admin/UserManagement'
-import OcorrenciasManagement from './pages/admin/OcorrenciasManagement' // Importação Nova
-import ComunicadosManagement from './pages/admin/ComunicadosManagement' // Importação Nova
+import OcorrenciasManagement from './pages/admin/OcorrenciasManagement'
+import ComunicadosManagement from './pages/admin/ComunicadosManagement'
+import VotacoesManagement from './pages/admin/VotacoesManagement' // Nova
+import FinanceiroManagement from './pages/admin/FinanceiroManagement' // Nova
 
 // Componente de Proteção de Rota
 function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
@@ -104,14 +106,12 @@ export default function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
               <Route path="usuarios" element={<UserManagement />} />
-              
-              {/* Rotas Implementadas */}
               <Route path="ocorrencias" element={<OcorrenciasManagement />} />
               <Route path="comunicados" element={<ComunicadosManagement />} />
+              <Route path="votacoes" element={<VotacoesManagement />} />
+              <Route path="financeiro" element={<FinanceiroManagement />} />
               
               {/* Rotas Futuras */}
-              <Route path="votacoes" element={<div className="p-8">Módulo de Votações (Em breve)</div>} />
-              <Route path="financeiro" element={<div className="p-8">Módulo Financeiro (Em breve)</div>} />
               <Route path="ia" element={<div className="p-8">Treinamento de IA (Em breve)</div>} />
             </Route>
 
