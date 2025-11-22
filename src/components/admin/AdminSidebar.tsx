@@ -4,7 +4,7 @@ import { versixTheme } from '../../config/theme-versix'
 
 export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation()
-  const { signOut } = useAuth()
+  const { signOut, isAdmin } = useAuth() // Usamos o helper isAdmin
   
   const isActive = (path: string) => location.pathname === path
 
@@ -15,7 +15,8 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
     { path: '/admin/comunicados', label: 'Comunicados', icon: '📢' },
     { path: '/admin/votacoes', label: 'Assembleia', icon: '🗳️' },
     { path: '/admin/financeiro', label: 'Financeiro', icon: '💰' },
-    { path: '/admin/ia', label: 'Treinar IA', icon: '🧠' },
+    // Este item só aparecerá se o usuário for ADMIN (Super)
+    ...(isAdmin ? [{ path: '/admin/ia', label: 'Treinar IA', icon: '🧠' }] : []),
   ]
 
   return (

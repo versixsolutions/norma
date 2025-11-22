@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import EmptyState from '../../components/EmptyState'
-import Modal from '../../components/ui/Modal' // Reutilizando o Modal existente
+import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface UserData {
@@ -15,7 +15,6 @@ interface UserData {
   created_at: string
 }
 
-// Opções de Níveis de Acesso
 const ROLES = [
   { value: 'morador', label: 'Morador' },
   { value: 'conselho', label: 'Conselho Fiscal' },
@@ -26,13 +25,14 @@ const ROLES = [
 ]
 
 export default function UserManagement() {
-  const { user: currentUser } = useAuth()
+  // AGORA IMPORTAMOS 'profile' E OS HELPERS PARA VERIFICAR QUEM ESTÁ LOGADO
+  const { user: currentUser, profile, isAdmin } = useAuth()
+  
   const [users, setUsers] = useState<UserData[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'active'>('pending')
   const [processingId, setProcessingId] = useState<string | null>(null)
   
-  // Estados para Edição
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserData | null>(null)
 
@@ -65,11 +65,10 @@ export default function UserManagement() {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ role: 'morador' }) // Padrão ao aprovar é morador
+        .update({ role: 'morador' })
         .eq('id', id)
 
       if (error) throw error
-      
       setUsers(prev => prev.map(u => u.id === id ? { ...u, role: 'morador' } : u))
     } catch (error: any) {
       alert('Erro: ' + error.message)
@@ -94,25 +93,38 @@ export default function UserManagement() {
 
   // --- AÇÕES DE EDIÇÃO (ATIVOS) ---
 
-  function openEditModal(user: UserData) {
-    setEditingUser({ ...user }) // Cria uma cópia para editar
+  function openEditModal(targetUser: UserData) {
+    // TRAVA DE SEGURANÇA 1:
+    // Se eu NÃO sou Admin, não posso editar um Admin.
+    if (!isAdmin && targetUser.role === 'admin') {
+      alert('Apenas Super Administradores podem editar outros Administradores.')
+      return
+    }
+
+    setEditingUser({ ...targetUser })
     setIsEditModalOpen(true)
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault()
-    if (!editingUser) return
+    if (!editingUser || !currentUser) return
+
+    // TRAVA DE SEGURANÇA 2:
+    // Se eu NÃO sou Admin, não posso promover ninguém a Admin.
+    if (!isAdmin && editingUser.role === 'admin') {
+      alert('Você não tem permissão para promover usuários a Administrador.')
+      return
+    }
+
+    // TRAVA DE SEGURANÇA 3 (Auto-Rebaixamento):
+    if (editingUser.id === currentUser.id && editingUser.role !== profile?.role) {
+       if(!confirm('ATENÇÃO: Você está alterando seu próprio nível de acesso. Você pode perder acesso a esta tela. Continuar?')) {
+          return
+       }
+    }
 
     setProcessingId(editingUser.id)
     try {
-      // Proteção: Não permitir que eu edite meu próprio papel para algo menor que admin e me tranque fora
-      if (editingUser.id === currentUser?.id && editingUser.role !== 'admin' && editingUser.role !== 'sindico') {
-         if(!confirm('ATENÇÃO: Você está rebaixando seu próprio nível de acesso. Você pode perder acesso a esta tela. Continuar?')) {
-            setProcessingId(null)
-            return
-         }
-      }
-
       const { error } = await supabase
         .from('users')
         .update({
@@ -125,7 +137,6 @@ export default function UserManagement() {
 
       if (error) throw error
 
-      // Atualiza a lista local
       setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u))
       setIsEditModalOpen(false)
       setEditingUser(null)
@@ -146,7 +157,6 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header e Filtros */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Gestão de Usuários</h1>
@@ -154,30 +164,19 @@ export default function UserManagement() {
         </div>
         
         <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          <button
-            onClick={() => setFilter('pending')}
-            className={`px-4 py-2 rounded-md text-sm font-bold transition ${filter === 'pending' ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
+          <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-bold transition ${filter === 'pending' ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-50'}`}>
             Pendentes ({users.filter(u => u.role === 'pending').length})
           </button>
-          <button
-            onClick={() => setFilter('active')}
-            className={`px-4 py-2 rounded-md text-sm font-bold transition ${filter === 'active' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
+          <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-md text-sm font-bold transition ${filter === 'active' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
             Ativos ({users.filter(u => u.role !== 'pending').length})
           </button>
         </div>
       </div>
 
-      {/* Lista */}
       {loading ? (
         <LoadingSpinner />
       ) : filteredUsers.length === 0 ? (
-        <EmptyState 
-          icon={filter === 'pending' ? '✅' : '👥'} 
-          title={filter === 'pending' ? 'Tudo limpo!' : 'Nenhum usuário'} 
-          description={filter === 'pending' ? 'Não há cadastros pendentes de aprovação.' : 'Nenhum usuário ativo encontrado.'} 
-        />
+        <EmptyState icon={filter === 'pending' ? '✅' : '👥'} title={filter === 'pending' ? 'Tudo limpo!' : 'Nenhum usuário'} description="Nenhum registro encontrado." />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -186,7 +185,7 @@ export default function UserManagement() {
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold">
                   <th className="px-6 py-4">Usuário</th>
                   <th className="px-6 py-4">Unidade</th>
-                  <th className="px-6 py-4">Nível (Role)</th>
+                  <th className="px-6 py-4">Nível</th>
                   <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
               </thead>
@@ -196,42 +195,32 @@ export default function UserManagement() {
                     <td className="px-6 py-4">
                       <p className="font-bold text-gray-900 text-sm">{user.full_name}</p>
                       <p className="text-xs text-gray-500">{user.email}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{user.phone}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded font-mono text-xs font-bold border border-gray-200">
-                        {user.unit_number || 'N/A'}
-                      </span>
+                      <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded font-mono text-xs font-bold border border-gray-200">{user.unit_number || 'N/A'}</span>
                     </td>
                     <td className="px-6 py-4">
-                      {/* Badge de Role */}
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
-                        user.role === 'pending' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                        user.role === 'admin' ? 'bg-red-100 text-red-800 border-red-200' :
-                        user.role === 'sindico' ? 'bg-purple-100 text-purple-800 border-purple-200' :
-                        user.role === 'conselho' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                        'bg-green-100 text-green-800 border-green-200'
-                      }`}>
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border 
+                        ${user.role === 'admin' ? 'bg-red-100 text-red-800 border-red-200' : 
+                          user.role === 'sindico' ? 'bg-purple-100 text-purple-800 border-purple-200' : 
+                          'bg-green-100 text-green-800 border-green-200'}`}>
                         {user.role === 'sub_sindico' ? 'Sub-Síndico' : user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       {user.role === 'pending' ? (
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => handleReject(user.id)} disabled={!!processingId} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="Rejeitar">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                          <button onClick={() => handleApprove(user.id)} disabled={!!processingId} className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition shadow-sm">
-                            Aprovar
-                          </button>
+                          <button onClick={() => handleReject(user.id)} className="text-red-600 hover:bg-red-50 p-2 rounded"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                          <button onClick={() => handleApprove(user.id)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-green-700">Aprovar</button>
                         </div>
                       ) : (
-                        <button 
-                          onClick={() => openEditModal(user)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1.5 hover:bg-blue-50 rounded-lg transition"
-                        >
-                          Editar
-                        </button>
+                        // BOTÃO DE EDITAR CONDICIONAL
+                        // Se não sou Admin, e o alvo é Admin, o botão fica desabilitado/oculto
+                        (!isAdmin && user.role === 'admin') ? (
+                          <span className="text-xs text-gray-400 italic">Protegido</span>
+                        ) : (
+                          <button onClick={() => openEditModal(user)} className="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded text-sm font-medium">Editar</button>
+                        )
                       )}
                     </td>
                   </tr>
@@ -243,82 +232,41 @@ export default function UserManagement() {
       )}
 
       {/* MODAL DE EDIÇÃO */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        title="Editar Usuário"
-      >
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Usuário">
         {editingUser && (
           <form onSubmit={handleSaveEdit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={editingUser.full_name}
-                onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
-              />
+              <input type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={editingUser.full_name} onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })} />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Unidade</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={editingUser.unit_number}
-                  onChange={e => setEditingUser({ ...editingUser, unit_number: e.target.value })}
-                />
+                <input type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={editingUser.unit_number} onChange={e => setEditingUser({ ...editingUser, unit_number: e.target.value })} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={editingUser.phone || ''}
-                  onChange={e => setEditingUser({ ...editingUser, phone: e.target.value })}
-                />
+                <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={editingUser.phone || ''} onChange={e => setEditingUser({ ...editingUser, phone: e.target.value })} />
               </div>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Acesso (Role)</label>
-              <div className="relative">
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
-                  value={editingUser.role}
-                  onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
-                >
-                  {ROLES.map(role => (
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Acesso</label>
+              <select 
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                value={editingUser.role}
+                onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+              >
+                {ROLES.map(role => (
+                  // Se eu não sou admin, não posso ver a opção 'admin' no select para promover alguém
+                  (!isAdmin && role.value === 'admin') ? null : (
                     <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                ⚠️ Cuidado ao promover usuários para 'Admin' ou 'Síndico'. Eles terão acesso total ao sistema.
-              </p>
+                  )
+                ))}
+              </select>
             </div>
-
             <div className="pt-4 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={!!processingId}
-                className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md"
-              >
-                {processingId ? 'Salvando...' : 'Salvar Alterações'}
-              </button>
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50">Cancelar</button>
+              <button type="submit" disabled={!!processingId} className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md">{processingId ? 'Salvando...' : 'Salvar Alterações'}</button>
             </div>
           </form>
         )}
