@@ -95,7 +95,6 @@ export default function Despesas() {
     })
   }, [despesas, selectedCategory, statusFilter, selectedMonth])
 
-  // --- FUNÇÃO DE EXPORTAÇÃO CSV ---
   const handleExport = () => {
     const headers = ['Descrição', 'Categoria', 'Vencimento', 'Valor', 'Status', 'Pago Em']
     const rows = filteredDespesas.map(d => [
@@ -120,11 +119,9 @@ export default function Despesas() {
     document.body.removeChild(link)
   }
 
-  // Cálculos de Totais
   const totalPago = filteredDespesas.filter(d => d.paid_at).reduce((sum, d) => sum + Number(d.amount), 0)
   const totalPendente = filteredDespesas.filter(d => !d.paid_at).reduce((sum, d) => sum + Number(d.amount), 0)
 
-  // Gráficos (Mantidos da versão anterior, apenas referenciados para clareza)
   const categoryData = useMemo(() => {
     const groups: Record<string, number> = {}
     let totalAmount = 0
@@ -187,7 +184,6 @@ export default function Despesas() {
         </button>
       }
     >
-      {/* --- FILTROS --- */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 sticky top-20 z-30">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="w-full md:w-auto flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
@@ -215,9 +211,7 @@ export default function Despesas() {
         </div>
       </div>
 
-      {/* --- GRÁFICOS E RESUMOS --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Card de Balanço */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
           <div>
             <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">Balanço do Período</h3>
@@ -235,7 +229,6 @@ export default function Despesas() {
           <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 text-center">{filteredDespesas.length} lançamentos encontrados</div>
         </div>
 
-        {/* Card de Evolução */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">Evolução de Gastos (6 meses)</h3>
           <div className="flex-1 flex items-end justify-between gap-2 h-32 mt-2">
@@ -255,7 +248,6 @@ export default function Despesas() {
           </div>
         </div>
 
-        {/* Card de Categorias */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">Onde gastamos mais?</h3>
           <div className="space-y-3">
@@ -276,7 +268,6 @@ export default function Despesas() {
         </div>
       </div>
 
-      {/* --- LISTAGEM --- */}
       {filteredDespesas.length > 0 ? (
         <div className="space-y-3">
           {filteredDespesas.map((despesa) => {

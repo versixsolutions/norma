@@ -12,7 +12,6 @@ export const signupSchema = z.object({
   
   password: z.string()
     .min(6, 'A senha deve ter no mínimo 6 caracteres'),
-    // Pode-se adicionar .regex(/[A-Z]/, 'Precisa de uma maiúscula') para mais segurança
   
   phone: z.string()
     .min(14, 'Telefone incompleto') // (XX) XXXXX-XXXX
@@ -30,5 +29,4 @@ export const signupSchema = z.object({
   isWhatsapp: z.boolean()
 })
 
-// Tipo inferido do schema para uso no TypeScript
 export type SignupFormData = z.infer<typeof signupSchema>

@@ -22,7 +22,6 @@ export function useOcorrencias(statusFilter?: string) {
       setLoading(true)
       setError(null)
 
-      // 1. Buscar Lista (com filtro se necessário)
       let query = supabase
         .from('ocorrencias')
         .select('*')
@@ -36,20 +35,16 @@ export function useOcorrencias(statusFilter?: string) {
       if (listError) throw listError
       setOcorrencias(listData || [])
 
-      // 2. Buscar Estatísticas Otimizadas (Count direto no banco)
-      // Abertas
       const { count: countAbertas } = await supabase
         .from('ocorrencias')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'aberto')
 
-      // Em Andamento
       const { count: countAndamento } = await supabase
         .from('ocorrencias')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'em_andamento')
 
-      // Resolvidas no Mês Atual
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString()

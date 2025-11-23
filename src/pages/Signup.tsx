@@ -9,7 +9,6 @@ import { ZodError } from 'zod'
 const logo = '/assets/logos/versix-solutions-logo.png'
 
 export default function Signup() {
-  // Estado único para o formulário
   const [formData, setFormData] = useState<SignupFormData>({
     email: '',
     password: '',
@@ -36,7 +35,6 @@ export default function Signup() {
     if (value.length > 10) value = `${value.substring(0, 10)}-${value.substring(10)}`
     
     setFormData(prev => ({ ...prev, phone: value }))
-    // Limpa erro específico se existir
     if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: '' }))
   }
 
@@ -53,10 +51,8 @@ export default function Signup() {
     setLoading(true)
 
     try {
-      // 1. Validação com Zod
       const validData = signupSchema.parse(formData)
 
-      // 2. Envio ao Supabase
       await signUp(
         validData.email, 
         validData.password, 
@@ -72,7 +68,6 @@ export default function Signup() {
 
     } catch (err: any) {
       if (err instanceof ZodError) {
-        // Mapeia erros do Zod para o estado de erros de campo
         const errors: Record<string, string> = {}
         err.errors.forEach(error => {
           if (error.path[0]) errors[error.path[0] as string] = error.message
@@ -124,7 +119,6 @@ export default function Signup() {
             </div>
           )}
 
-          {/* Nome Completo */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Nome Completo</label>
             <input
@@ -138,7 +132,6 @@ export default function Signup() {
             {fieldErrors.fullName && <p className="text-red-500 text-xs mt-1">{fieldErrors.fullName}</p>}
           </div>
 
-          {/* Condomínio */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Condomínio</label>
             <select
@@ -158,7 +151,6 @@ export default function Signup() {
             {fieldErrors.condominioId && <p className="text-red-500 text-xs mt-1">{fieldErrors.condominioId}</p>}
           </div>
 
-          {/* Tipo e Unidade */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Sou</label>
@@ -187,7 +179,6 @@ export default function Signup() {
             </div>
           </div>
 
-          {/* Telefone */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Celular / WhatsApp</label>
             <input
@@ -211,7 +202,6 @@ export default function Signup() {
             </label>
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Email</label>
             <input
@@ -225,7 +215,6 @@ export default function Signup() {
             {fieldErrors.email && <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>}
           </div>
 
-          {/* Senha */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">Senha</label>
             <input

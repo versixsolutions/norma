@@ -4,7 +4,7 @@ import { versixTheme } from '../../config/theme-versix'
 
 export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation()
-  const { signOut, isAdmin } = useAuth() // Usamos o helper isAdmin
+  const { signOut, isAdmin } = useAuth()
   
   const isActive = (path: string) => location.pathname === path
 
@@ -15,13 +15,11 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
     { path: '/admin/comunicados', label: 'Comunicados', icon: '📢' },
     { path: '/admin/votacoes', label: 'Assembleia', icon: '🗳️' },
     { path: '/admin/financeiro', label: 'Financeiro', icon: '💰' },
-    // Este item só aparecerá se o usuário for ADMIN (Super)
     ...(isAdmin ? [{ path: '/admin/ia', label: 'Treinar IA', icon: '🧠' }] : []),
   ]
 
   return (
     <div className="h-full flex flex-col bg-white border-r border-gray-200">
-      {/* Header da Sidebar */}
       <div className="p-6 border-b border-gray-100 flex items-center gap-3">
         <img 
           src={versixTheme.branding.logoUrl} 
@@ -34,7 +32,6 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Menu */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {menuItems.map((item) => {
           const active = isActive(item.path)
@@ -55,7 +52,6 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
               </span>
               <span className="text-sm">{item.label}</span>
               
-              {/* Indicador Ativo */}
               {active && (
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600"></div>
               )}
@@ -64,7 +60,6 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="p-4 border-t border-gray-100">
         <button 
           onClick={() => signOut()}

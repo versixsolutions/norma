@@ -9,7 +9,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const [pendingCount, setPendingCount] = useState<number | null>(null)
 
-  // Buscar contagem de usuários pendentes em tempo real
   useEffect(() => {
     async function fetchPendingUsers() {
       const { count } = await supabase
@@ -52,11 +51,10 @@ export default function AdminDashboard() {
     },
     {
       title: 'Aprovar Cadastros',
-      // Mostra o contador real ou um spinner/traço se estiver carregando
       value: pendingCount !== null ? pendingCount : '-', 
       label: pendingCount === 1 ? '1 pendente' : `${pendingCount || 0} pendentes`,
       icon: '👥',
-      color: pendingCount && pendingCount > 0 ? 'text-red-600' : 'text-blue-600', // Vermelho se houver pendências
+      color: pendingCount && pendingCount > 0 ? 'text-red-600' : 'text-blue-600', 
       bg: pendingCount && pendingCount > 0 ? 'bg-red-50' : 'bg-blue-50',
       link: '/admin/usuarios'
     }
@@ -69,10 +67,6 @@ export default function AdminDashboard() {
         <p className="text-gray-500">Resumo das atividades do condomínio.</p>
       </div>
 
-      {/* ALTERAÇÃO: Layout responsivo híbrido 
-        - Mobile: Flexbox com scroll horizontal (snap)
-        - Desktop: Grid tradicional
-      */}
       <div className="
         flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4
         md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible md:pb-0 md:snap-none
@@ -93,7 +87,6 @@ export default function AdminDashboard() {
               <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${card.bg}`}>
                 {card.icon}
               </div>
-              {/* Badge de Alerta para Cadastros */}
               {card.title === 'Aprovar Cadastros' && (pendingCount || 0) > 0 && (
                 <span className="relative flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -108,7 +101,6 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Área de Acesso Rápido */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <h3 className="font-bold text-gray-900 mb-4">Atalhos Operacionais</h3>

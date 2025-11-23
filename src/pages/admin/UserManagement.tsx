@@ -25,7 +25,6 @@ const ROLES = [
 ]
 
 export default function UserManagement() {
-  // AGORA IMPORTAMOS 'profile' E OS HELPERS PARA VERIFICAR QUEM ESTÁ LOGADO
   const { user: currentUser, profile, isAdmin } = useAuth()
   
   const [users, setUsers] = useState<UserData[]>([])
@@ -56,8 +55,6 @@ export default function UserManagement() {
       setLoading(false)
     }
   }
-
-  // --- AÇÕES DE APROVAÇÃO/REJEIÇÃO (PENDENTES) ---
 
   async function handleApprove(id: string) {
     if (!confirm('Confirmar aprovação deste morador?')) return
@@ -91,11 +88,7 @@ export default function UserManagement() {
     }
   }
 
-  // --- AÇÕES DE EDIÇÃO (ATIVOS) ---
-
   function openEditModal(targetUser: UserData) {
-    // TRAVA DE SEGURANÇA 1:
-    // Se eu NÃO sou Admin, não posso editar um Admin.
     if (!isAdmin && targetUser.role === 'admin') {
       alert('Apenas Super Administradores podem editar outros Administradores.')
       return
@@ -109,14 +102,11 @@ export default function UserManagement() {
     e.preventDefault()
     if (!editingUser || !currentUser) return
 
-    // TRAVA DE SEGURANÇA 2:
-    // Se eu NÃO sou Admin, não posso promover ninguém a Admin.
     if (!isAdmin && editingUser.role === 'admin') {
       alert('Você não tem permissão para promover usuários a Administrador.')
       return
     }
 
-    // TRAVA DE SEGURANÇA 3 (Auto-Rebaixamento):
     if (editingUser.id === currentUser.id && editingUser.role !== profile?.role) {
        if(!confirm('ATENÇÃO: Você está alterando seu próprio nível de acesso. Você pode perder acesso a esta tela. Continuar?')) {
           return
@@ -214,8 +204,6 @@ export default function UserManagement() {
                           <button onClick={() => handleApprove(user.id)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-green-700">Aprovar</button>
                         </div>
                       ) : (
-                        // BOTÃO DE EDITAR CONDICIONAL
-                        // Se não sou Admin, e o alvo é Admin, o botão fica desabilitado/oculto
                         (!isAdmin && user.role === 'admin') ? (
                           <span className="text-xs text-gray-400 italic">Protegido</span>
                         ) : (
@@ -231,7 +219,6 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO */}
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Usuário">
         {editingUser && (
           <form onSubmit={handleSaveEdit} className="space-y-4">
@@ -257,7 +244,6 @@ export default function UserManagement() {
                 onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
               >
                 {ROLES.map(role => (
-                  // Se eu não sou admin, não posso ver a opção 'admin' no select para promover alguém
                   (!isAdmin && role.value === 'admin') ? null : (
                     <option key={role.value} value={role.value}>{role.label}</option>
                   )
