@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 // CONFIGURAÇÃO VAPID (WEB PUSH)
 // Cole aqui a sua PUBLIC KEY gerada pelo comando: npx web-push generate-vapid-keys
 // ==============================================================================
-const VAPID_PUBLIC_KEY = 'BFnGmgzVuz_U7xU8N_4PHG0tzsWdJ9JfX4F6YfyDs6htNypEMM2dTkJUFVRq6nPBdjztf1Q8PEmC6XBrSDkngPA' 
+const VAPID_PUBLIC_KEY = 'BKEj4ZZVnsI-ctNxQBN4hrDUoP2NKntKJ_or3NU5QTYUJSsZAsUdTaKkD-yO_zo7tYUDMbbye2kvMuxQGk611Ns' 
 
 // Função utilitária para converter a chave base64 string para ArrayBuffer (necessário para o navegador)
 function urlBase64ToUint8Array(base64String: string) {
