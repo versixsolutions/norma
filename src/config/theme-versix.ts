@@ -1,13 +1,11 @@
 // src/config/theme-versix.ts
 /**
- * TEMA VERSIX MEU CONDOMINIO
+ * TEMA VERSIX NORMA
  * Sistema de cores e tipografia baseado na identidade visual da Versix Solutions.
- * 
- * Cores extraídas da logo:
+ * * Cores extraídas da logo:
  * - Azul Marinho (Primary): #1F4080 (Texto e base)
  * - Verde/Ciano (Secondary): #00A86B (Acento e gradiente)
- * 
- * Fonte: Inter (mantida como padrão)
+ * * Fonte: Inter (mantida como padrão)
  */
 
 import { pinheiroParkTheme } from './theme-pinheiropark'
@@ -15,10 +13,10 @@ import { pinheiroParkTheme } from './theme-pinheiropark'
 export const versixTheme = {
   ...pinheiroParkTheme, // Herda a estrutura e configurações de módulos
 
-  // Informações do produto (Versix Meu Condominio)
-  name: 'Versix Meu Condominio',
-  slug: 'versix-meu-condominio',
-  fullName: 'Versix Meu Condominio - Gestão Inteligente',
+  // Informações do produto (Versix Norma)
+  name: 'Versix Norma',
+  slug: 'versix-norma',
+  fullName: 'Versix Norma - Gestão Inteligente',
   
   // Cores principais (Baseado na logo Versix Solutions)
   colors: {
@@ -83,7 +81,7 @@ export const versixTheme = {
     
     // Metadados
     meta: {
-      title: 'Versix Meu Condominio - Gestão Inteligente',
+      title: 'Versix Norma - Gestão Inteligente',
       description: 'Sistema de gestão condominial da Versix Solutions. Gestão à vista. Confiança total.',
       keywords: ['condomínio', 'gestão', 'versix', 'soluções', 'transparência'],
     },

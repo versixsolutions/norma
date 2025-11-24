@@ -6,8 +6,7 @@ import { useNavigate, Link } from 'react-router-dom'
 // Certifique-se que o ficheiro 'logo.png' está em 'public/assets/logos/logo.png'
 const logo = '/assets/logos/versix-solutions-logo.png'
 
-// CORREÇÃO DE ERRO 7: Revertendo para '../contexts/AuthContext'
-// Este era o caminho no seu ficheiro original.
+// CORREÇÃO DE ERRO 7: Caminho correto para AuthContext
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
@@ -45,11 +44,11 @@ export default function Login() {
           {/* ATUALIZAÇÃO: Tamanho aumentado de w-20 h-20 para w-40 e h-auto para manter a proporção */}
           <img
             src={logo}
-            alt="Versix Meu Condominio"
+            alt="Versix Norma"
             className="w-40 h-auto mx-auto mb-4"
           />
-          {/* Título atualizado para Pinheiro Park */}
-          <h1 className="text-3xl font-bold text-gray-900">Syn</h1>
+          {/* Título atualizado para Versix Norma */}
+          <h1 className="text-3xl font-bold text-gray-900">Versix Norma</h1>
           <p className="text-gray-600 mt-2">Versix - Gestão à vista. Confiança total.</p>
         </div>
 
@@ -100,9 +99,6 @@ export default function Login() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-
-        {/* REMOÇÃO: A div de contas de teste foi removida conforme solicitado.
-        */}
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-600 mt-6">

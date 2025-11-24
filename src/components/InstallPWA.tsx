@@ -36,7 +36,7 @@ export default function InstallPWA() {
       <div className="flex items-start gap-3">
         <div className="text-3xl">📱</div>
         <div className="flex-1">
-          <h3 className="font-bold mb-1">Instalar Condomix</h3>
+          <h3 className="font-bold mb-1">Instalar Versix Norma</h3>
           <p className="text-sm text-purple-100 mb-3">
             Adicione à tela inicial para acesso rápido!
           </p>

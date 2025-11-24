@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Versix Meu Condomínio',
-        short_name: 'Meu Condomínio',
+        name: 'Versix Norma',
+        short_name: 'Versix Norma',
         description: 'Gestão inteligente e transparente para seu condomínio',
         theme_color: '#00A86B',
         background_color: '#ffffff',

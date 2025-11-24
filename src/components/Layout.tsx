@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+// CORREÇÃO: Ajuste nos caminhos de importação
 import { useAuth } from '../contexts/AuthContext'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 import { useTheme } from '../contexts/ThemeContext'
@@ -75,12 +76,12 @@ export default function Layout() {
               <Link to="/" className="flex items-center gap-3 group">
                 <img 
                   src="/assets/logos/versix-solutions-logo.png" 
-                  alt="Versix Meu Condomínio" 
+                  alt="Versix Norma" 
                   className="h-10 w-auto bg-white rounded-md p-1 shadow-sm object-contain"
                 />
                 <div>
                   <h1 className="text-lg md:text-xl font-bold tracking-tight leading-tight">
-                    {profile?.condominio_name || 'Versix Syn'}
+                    {profile?.condominio_name || 'Versix Norma'}
                   </h1>
                   {/* Badge de Administrador no Título (Mobile/Desktop) */}
                   {canManage && (

@@ -113,7 +113,8 @@ export default function Despesas() {
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `despesas_condomix_${selectedMonth || 'geral'}.csv`)
+    // Atualizado o nome do arquivo para versix_norma
+    link.setAttribute("download", `despesas_versix_norma_${selectedMonth || 'geral'}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
