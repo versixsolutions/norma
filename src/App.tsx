@@ -2,8 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ReloadPrompt from './components/ReloadPrompt'
+import { Toaster } from 'react-hot-toast'
 
-// Pages Comuns
+// Pages Comuns - Verificando caminhos
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
@@ -21,14 +22,14 @@ import Biblioteca from './pages/Biblioteca'
 import Layout from './components/Layout'
 import PendingApproval from './pages/PendingApproval'
 
-// Pages Admin
+// Pages Admin - Verificando caminhos
 import AdminLayout from './components/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserManagement from './pages/admin/UserManagement'
 import OcorrenciasManagement from './pages/admin/OcorrenciasManagement'
 import ComunicadosManagement from './pages/admin/ComunicadosManagement'
-import VotacoesManagement from './pages/admin/VotacoesManagement' // Nova
-import FinanceiroManagement from './pages/admin/FinanceiroManagement' // Nova
+import VotacoesManagement from './pages/admin/VotacoesManagement'
+import FinanceiroManagement from './pages/admin/FinanceiroManagement'
 
 // Componente de Proteção de Rota
 function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
@@ -70,6 +71,40 @@ export default function App() {
       <AuthProvider>
         <ThemeProvider>
           <ReloadPrompt />
+          {/* Toaster Global Configurado */}
+          <Toaster 
+            position="top-center"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#333',
+                color: '#fff',
+                borderRadius: '8px',
+              },
+              success: {
+                style: {
+                  background: '#ecfdf5',
+                  color: '#047857',
+                  border: '1px solid #a7f3d0',
+                },
+                iconTheme: {
+                  primary: '#059669',
+                  secondary: '#ecfdf5',
+                },
+              },
+              error: {
+                style: {
+                  background: '#fef2f2',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                },
+                iconTheme: {
+                  primary: '#dc2626',
+                  secondary: '#fef2f2',
+                },
+              },
+            }}
+          />
           
           <Routes>
             {/* Rotas Públicas */}

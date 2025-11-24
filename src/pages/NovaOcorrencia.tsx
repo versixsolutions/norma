@@ -4,8 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
+import toast from 'react-hot-toast' // Importação
 
-// Categorias visuais para facilitar a escolha
 const CATEGORIES = [
   { id: 'manutencao', label: 'Manutenção', icon: '🔧', color: 'bg-orange-50 border-orange-200 text-orange-700' },
   { id: 'limpeza', label: 'Limpeza', icon: '🧹', color: 'bg-blue-50 border-blue-200 text-blue-700' },
@@ -16,7 +16,7 @@ const CATEGORIES = [
 
 export default function NovaOcorrencia() {
   const navigate = useNavigate()
-  const { user, profile } = useAuth() // Pegamos o profile aqui
+  const { user, profile } = useAuth() 
   const [loading, setLoading] = useState(false)
   
   const [formData, setFormData] = useState({
@@ -33,6 +33,11 @@ export default function NovaOcorrencia() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      // Validação básica de tamanho (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('A imagem deve ter no máximo 2MB.')
+        return
+      }
       setSelectedImage(file)
       setPreviewUrl(URL.createObjectURL(file))
     }
@@ -41,32 +46,31 @@ export default function NovaOcorrencia() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !profile?.condominio_id) {
-      alert('Erro: Perfil de usuário ou condomínio não identificado.')
+      toast.error('Erro de sessão. Faça login novamente.')
       return
     }
     
     setLoading(true)
+    const toastId = toast.loading('Registrando ocorrência...')
 
     try {
       let photoUrl = null
 
-      // 1. Upload da Imagem (se houver)
       if (selectedImage) {
+        toast.loading('Enviando foto...', { id: toastId })
         const fileExt = selectedImage.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        const filePath = `${user.id}/${fileName}`
-
+        const fileName = `${user.id}/${Date.now()}.${fileExt}` // Timestamp para unicidade
+        
         const { error: uploadError } = await supabase.storage
           .from('ocorrencias')
-          .upload(filePath, selectedImage)
+          .upload(fileName, selectedImage)
 
         if (uploadError) throw uploadError
 
-        const { data } = supabase.storage.from('ocorrencias').getPublicUrl(filePath)
+        const { data } = supabase.storage.from('ocorrencias').getPublicUrl(fileName)
         photoUrl = data.publicUrl
       }
 
-      // 2. Salvar no Banco de Dados
       const { error: insertError } = await supabase.from('ocorrencias').insert({
         title: formData.title,
         description: formData.description,
@@ -75,23 +79,23 @@ export default function NovaOcorrencia() {
         status: 'aberto',
         photo_url: photoUrl,
         author_id: user.id,
-        condominio_id: profile.condominio_id // <--- VÍNCULO IMPORTANTE ADICIONADO
+        condominio_id: profile.condominio_id
       })
 
       if (insertError) throw insertError
 
-      alert('Ocorrência registrada com sucesso!')
+      toast.success('Ocorrência registrada com sucesso!', { id: toastId })
       navigate('/ocorrencias')
 
     } catch (error: any) {
       console.error('Erro ao salvar:', error)
-      alert('Erro ao registrar ocorrência: ' + error.message)
+      toast.error('Erro ao registrar: ' + error.message, { id: toastId })
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) return <LoadingSpinner message="Registrando ocorrência..." />
+  if (loading) return <LoadingSpinner message="Processando..." />
 
   return (
     <PageLayout 
@@ -101,7 +105,6 @@ export default function NovaOcorrencia() {
     >
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
         
-        {/* 1. Categoria */}
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
           <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
             Qual o tipo do problema?
@@ -126,7 +129,6 @@ export default function NovaOcorrencia() {
           </div>
         </div>
 
-        {/* 2. Detalhes Básicos */}
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 space-y-4">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Título do Relato</label>
@@ -165,7 +167,6 @@ export default function NovaOcorrencia() {
           </div>
         </div>
 
-        {/* 3. Evidências (Foto) */}
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
           <label className="block text-sm font-bold text-gray-700 mb-3">Adicionar Foto (Opcional)</label>
           
@@ -180,9 +181,9 @@ export default function NovaOcorrencia() {
           {!previewUrl ? (
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition text-gray-400"
+              className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition text-gray-400 group"
             >
-              <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-10 h-10 mb-2 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -202,7 +203,6 @@ export default function NovaOcorrencia() {
           )}
         </div>
 
-        {/* Botões de Ação */}
         <div className="flex gap-4 pt-2 pb-6">
           <button
             type="button"
