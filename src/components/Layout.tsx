@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-// CORREÇÃO: Ajuste nos caminhos de importação
 import { useAuth } from '../contexts/AuthContext'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from './LoadingSpinner'
+import Chatbot from './Chatbot' // Importação do Chatbot
 
 interface NavItem {
   path: string
@@ -12,19 +12,25 @@ interface NavItem {
   icon: string
   badge?: number
   adminOnly?: boolean
+  isSpecial?: boolean // Nova propriedade para identificar o botão da Norma
+  action?: () => void // Ação para botões especiais
 }
 
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const { profile, signOut, canManage } = useAuth() // Usamos canManage para verificar permissão
+  const { profile, signOut, canManage } = useAuth()
   const { stats } = useDashboardStats()
   const { theme, loading } = useTheme()
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  // Estado global do Chatbot no Layout
+  const [isChatOpen, setIsChatOpen] = useState(false)
+
   const isActive = (path: string) => location.pathname === path
 
+  // Menu Desktop (Mantido conforme original ou ajustado levemente se necessário, mas focado no mobile)
   const desktopNavItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: '🏠' },
     { path: '/comunicacao', label: 'Comunicação', icon: '📢' },
@@ -33,10 +39,18 @@ export default function Layout() {
     { path: '/perfil', label: 'Perfil', icon: '👤' },
   ]
 
+  // Menu Mobile (Atualizado conforme solicitado)
   const mobileNavItems: NavItem[] = [
     { path: '/', label: 'Início', icon: '🏠' },
-    { path: '/comunicacao', label: 'Comunicação', icon: '📢' },
     { path: '/suporte', label: 'Suporte', icon: '🤝' },
+    // Item Especial da Norma
+    { 
+      path: '#chat', 
+      label: 'Norma', 
+      icon: 'N', 
+      isSpecial: true,
+      action: () => setIsChatOpen(true) 
+    },
     { path: '/transparencia', label: 'Transparência', icon: '💰' },
     { path: '/perfil', label: 'Perfil', icon: '👤' },
   ]
@@ -75,7 +89,7 @@ export default function Layout() {
 
               <Link to="/" className="flex items-center gap-3 group">
                 <img 
-                  src="/assets/logos/versix-solutions-logo.png" 
+                  src={theme.branding.logoUrl} 
                   alt="Versix Norma" 
                   className="h-10 w-auto bg-white rounded-md p-1 shadow-sm object-contain"
                 />
@@ -83,7 +97,6 @@ export default function Layout() {
                   <h1 className="text-lg md:text-xl font-bold tracking-tight leading-tight">
                     {profile?.condominio_name || 'Versix Norma'}
                   </h1>
-                  {/* Badge de Administrador no Título (Mobile/Desktop) */}
                   {canManage && (
                     <span className="bg-white/20 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-white/30 inline-block">
                       {profile?.role === 'admin' ? 'Super Admin' : 'Gestor'}
@@ -93,10 +106,7 @@ export default function Layout() {
               </Link>
             </div>
 
-            {/* User Menu Desktop */}
             <div className="hidden md:flex items-center gap-3">
-              
-              {/* BOTÃO DE ACESSO AO PAINEL ADMIN (Desktop) */}
               {canManage && (
                 <Link 
                   to="/admin" 
@@ -145,7 +155,6 @@ export default function Layout() {
             </button>
           </div>
 
-          {/* Botão Admin dentro do menu lateral também */}
           {canManage && (
             <div className="mb-4">
               <Link 
@@ -197,36 +206,60 @@ export default function Layout() {
 
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 pb-safe safe-area-pb">
-        {/* Botão Flutuante Admin para Mobile (Acima da tab bar) */}
+        {/* Botão Admin Flutuante (Reposicionado ou removido se interferir com a Norma, mas mantido por segurança no topo) */}
         {canManage && (
           <Link 
             to="/admin" 
-            className="absolute -top-12 right-4 bg-slate-900 text-white p-3 rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition transform hover:scale-110"
+            className="absolute -top-16 right-4 bg-slate-900 text-white p-2.5 rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition transform hover:scale-110 z-50"
             title="Painel Admin"
           >
             ⚙️
           </Link>
         )}
 
-        <div className={`grid gap-1 p-1 ${visibleMobileItems.length === 5 ? 'grid-cols-5' : 'grid-cols-' + visibleMobileItems.length}`}>
+        <div className="grid grid-cols-5 gap-1 p-1 h-16 items-end">
           {visibleMobileItems.map((item) => {
             const active = isActive(item.path)
+            
+            // RENDERIZAÇÃO DO BOTÃO ESPECIAL "NORMA"
+            if (item.isSpecial) {
+              return (
+                <button
+                  key={item.label}
+                  onClick={item.action}
+                  className="relative flex flex-col items-center justify-end pb-1 group -mt-8"
+                >
+                  <div 
+                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-white transform transition-transform active:scale-95"
+                    style={{ background: theme.colors.primary.DEFAULT }}
+                  >
+                    <span className="text-white text-2xl font-serif font-bold italic drop-shadow-md">
+                      {item.icon}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold mt-1" style={{ color: theme.colors.primary.DEFAULT }}>
+                    {item.label}
+                  </span>
+                </button>
+              )
+            }
+
+            // RENDERIZAÇÃO DOS BOTÕES NORMAIS
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className="relative flex flex-col items-center py-2 rounded-lg transition duration-200"
+                className="relative flex flex-col items-center justify-center py-2 rounded-lg transition duration-200 h-full"
                 style={{ 
                   color: active ? theme.colors.primary.DEFAULT : theme.colors.text.secondary,
-                  backgroundColor: active ? theme.colors.primary[50] : 'transparent'
                 }}
               >
-                <span className="text-xl mb-0.5">{item.icon}</span>
+                <span className={`text-xl mb-0.5 ${active ? 'scale-110' : ''} transition-transform`}>{item.icon}</span>
                 <span className={`text-[9px] font-medium truncate w-full text-center ${active ? 'font-bold' : ''}`}>
                   {item.label}
                 </span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white">
+                  <span className="absolute top-1 right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-white">
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 )}
@@ -235,6 +268,9 @@ export default function Layout() {
           })}
         </div>
       </nav>
+
+      {/* Componente Chatbot Global */}
+      <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
 
       {/* Main Content */}
       <main className="pb-24 md:pb-8 animate-fade-in flex-1">
