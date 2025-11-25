@@ -41,7 +41,8 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col lg:ml-64 min-h-screen transition-all duration-300">
+      {/* CORREÇÃO: Adicionado 'min-w-0' e 'overflow-x-hidden' para impedir que conteúdos largos (como tabelas ou cards) quebrem o layout mobile */}
+      <div className="flex-1 flex flex-col lg:ml-64 min-h-screen transition-all duration-300 min-w-0 overflow-x-hidden">
         
         {/* Topbar Administrativa */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30 px-4 py-3 shadow-sm">
@@ -65,7 +66,7 @@ export default function AdminLayout() {
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-gray-900">{profile?.full_name}</p>
-                <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full inline-block">
+                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full inline-block">
                   {profile?.role}
                 </p>
               </div>
