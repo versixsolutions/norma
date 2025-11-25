@@ -5,14 +5,13 @@ import { extractTextFromPDF } from '../lib/pdfUtils'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
-import { pipeline, env } from '@xenova/transformers' // Importação da IA
-import toast from 'react-hot-toast' // UX melhorada
+import { pipeline, env } from '@xenova/transformers'
+import toast from 'react-hot-toast'
 
-// Configuração da IA para não tentar buscar modelos locais no navegador
+// Configuração da IA
 env.allowLocalModels = false;
-env.useBrowserCache = true; // Mantém o modelo em cache para ser rápido nas próximas vezes
+env.useBrowserCache = true;
 
-// CONSTANTE GLOBAL
 const CATEGORIAS_DOCS = [
   { id: 'atas', label: 'Atas de Assembleia', icon: '📝', color: 'bg-blue-100 text-blue-700' },
   { id: 'regimento', label: 'Regimento Interno', icon: '📜', color: 'bg-purple-100 text-purple-700' },
@@ -34,6 +33,7 @@ interface Documento {
     category?: string
   }
   created_at: string
+  embedding?: any
 }
 
 function sanitizeFileName(name: string) {
@@ -43,6 +43,18 @@ function sanitizeFileName(name: string) {
     .replace(/\s+/g, '_')           
     .replace(/[^a-zA-Z0-9._-]/g, '') 
     .toLowerCase()
+}
+
+// Helper para gerar "tópicos" falsos a partir do texto cru para o resumo visual
+function generateTopics(text: string): string[] {
+  // Limpa o texto
+  const cleanText = text.replace(/\s+/g, ' ').trim()
+  // Tenta dividir por frases ou quebras comuns
+  const sentences = cleanText.split(/(?<=[.?!])\s+|(?=Art\.)|(?=Cláusula)/)
+    .filter(s => s.length > 15) // Ignora fragmentos muito curtos
+    .slice(0, 3) // Pega as 3 primeiras frases relevantes
+  
+  return sentences.length > 0 ? sentences : [cleanText.slice(0, 150) + '...']
 }
 
 export default function Biblioteca() {
@@ -91,7 +103,6 @@ export default function Biblioteca() {
     })
   }
 
-  // --- FUNÇÃO DE UPLOAD INTELIGENTE ---
   const handleUpload = async () => {
     if (!selectedFile || !profile?.condominio_id || !canManage || !user) return
 
@@ -101,27 +112,19 @@ export default function Biblioteca() {
     try {
       const categoryLabel = CATEGORIAS_DOCS.find(c => c.id === uploadCategory)?.label || 'Documento'
       
-      // 1. Extração de Texto (OCR / PDF Parse)
       toast.loading('Lendo conteúdo do PDF...', { id: toastId })
       const textContent = await extractTextFromPDF(selectedFile)
       
       if (!textContent || textContent.length < 50) {
-        throw new Error('O PDF parece vazio ou é uma imagem sem texto. A IA não conseguirá ler.')
+        throw new Error('O PDF parece vazio ou é uma imagem. A IA não conseguirá ler.')
       }
 
-      // 2. Geração de Embedding (IA Local) - O PASSO MÁGICO
-      toast.loading('A Norma está estudando o documento... (Isso pode levar alguns segundos)', { id: toastId })
+      toast.loading('A Norma está estudando o documento...', { id: toastId })
       
-      // Carrega o modelo no navegador (na 1ª vez baixa uns 30MB, nas próximas é instantâneo pelo cache)
       const generateEmbedding = await pipeline('feature-extraction', 'Supabase/gte-small');
-      
-      // Gera o vetor matemático do texto
       const output = await generateEmbedding(textContent, { pooling: 'mean', normalize: true });
       const embedding = Array.from(output.data);
 
-      console.log(`Embedding gerado com sucesso! Dimensões: ${embedding.length}`)
-
-      // 3. Upload do Arquivo
       toast.loading('Enviando para a nuvem...', { id: toastId })
       const cleanName = sanitizeFileName(selectedFile.name)
       const fileName = `${profile.condominio_id}/${Date.now()}_${cleanName}`
@@ -136,11 +139,10 @@ export default function Biblioteca() {
         .from('biblioteca')
         .getPublicUrl(fileName)
 
-      // 4. Salvar no Banco com o Vetor de IA
       const { error: dbError } = await supabase.from('documents').insert({
         title: selectedFile.name.replace('.pdf', ''),
         content: textContent,
-        embedding: embedding, // <--- AQUI ESTÁ A MÁGICA: Salvamos o cérebro junto com o corpo
+        embedding: embedding,
         tags: `${categoryLabel.toLowerCase()} ${uploadCategory} pdf documento oficial`,
         condominio_id: profile.condominio_id,
         metadata: {
@@ -153,7 +155,6 @@ export default function Biblioteca() {
 
       if (dbError) throw dbError
 
-      // 5. Comunicado Automático
       const { error: comunicError } = await supabase.from('comunicados').insert({
         title: `Novo Documento: ${selectedFile.name.replace('.pdf', '')}`,
         content: `Um novo arquivo foi adicionado à Biblioteca Digital na categoria **${categoryLabel}**. \n\nA Norma já leu e está pronta para tirar dúvidas sobre ele.`,
@@ -165,7 +166,7 @@ export default function Biblioteca() {
 
       if (comunicError) console.error("Erro ao criar comunicado:", comunicError)
 
-      toast.success('Documento salvo e aprendido pela Norma!', { id: toastId })
+      toast.success('Documento salvo e aprendido!', { id: toastId })
       setIsModalOpen(false)
       setSelectedFile(null)
       loadDocs()
@@ -206,6 +207,7 @@ export default function Biblioteca() {
         ) : null
       }
     >
+      {/* Barra de Busca e Filtros */}
       <div className="mb-6 space-y-4">
         <div className="relative">
           <input type="text" placeholder="Buscar nos documentos..." className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
@@ -219,20 +221,19 @@ export default function Biblioteca() {
         </div>
       </div>
 
+      {/* Lista de Documentos */}
       {filteredDocs.length > 0 ? (
         <div className="grid gap-4">
           {filteredDocs.map((doc) => {
             const category = CATEGORIAS_DOCS.find(c => c.id === doc.metadata?.category) || CATEGORIAS_DOCS[6]
             const isExpanded = expandedDocs.has(doc.id)
-            
-            // Resumo limpo
-            const cleanContent = doc.content.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-            const summary = cleanContent.slice(0, 140) + (cleanContent.length > 140 ? '...' : '')
+            const topics = generateTopics(doc.content) // Gera tópicos para o resumo
 
             return (
-              <div key={doc.id} className={`bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-primary transition group relative overflow-hidden ${isExpanded ? 'ring-2 ring-primary ring-opacity-50' : ''}`}>
+              <div key={doc.id} className={`bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-primary transition-all duration-300 group relative overflow-hidden ${isExpanded ? 'ring-2 ring-primary ring-opacity-50' : ''}`}>
                 
-                <div className="flex justify-between items-start mb-2">
+                {/* Header do Card */}
+                <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${category.color}`}>
                       {category.icon} {category.label}
@@ -240,46 +241,66 @@ export default function Biblioteca() {
                   </div>
                 </div>
 
-                <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-1">{doc.title || doc.metadata?.title}</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4 line-clamp-2">{doc.title || doc.metadata?.title}</h3>
                 
-                <div className={`relative transition-all duration-300`}>
+                {/* CONTEÚDO CONDICIONAL */}
+                <div className={`transition-all duration-300`}>
+                  
                   {isExpanded ? (
+                    // --- MODO EXPANDIDO ---
                     <div className="animate-fade-in">
-                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4">
+                       {/* Área de Texto Completo (com scroll se necessário, mas limitado para não quebrar a página) */}
+                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4 max-h-96 overflow-y-auto custom-scrollbar">
                          <p className="text-sm text-gray-700 leading-relaxed font-sans whitespace-pre-line">
-                           {doc.content.slice(0, 2000)}
-                           {doc.content.length > 2000 && <span className="text-gray-400 italic block mt-2">(...continuar lendo no PDF original)</span>}
+                           {doc.content}
                          </p>
                        </div>
                        
+                       {/* Botão de Ação Principal */}
                        {doc.metadata?.url && (
                           <a 
                             href={doc.metadata.url} 
                             target="_blank" 
                             rel="noreferrer"
-                            className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-3 rounded-lg text-sm font-bold hover:bg-primary-dark transition shadow-md mb-2"
+                            className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-3.5 rounded-xl text-sm font-bold hover:bg-primary-dark transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Abrir Documento PDF
+                            Baixar / Visualizar PDF Original
                           </a>
                        )}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500 mb-2">
-                      <span className="font-medium text-gray-700">Resumo: </span>
-                      {summary}
+                    // --- MODO RESUMO (TÓPICOS) ---
+                    <div className="mb-2">
+                      <p className="text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Resumo do conteúdo:</p>
+                      <ul className="space-y-2">
+                        {topics.map((topic, index) => (
+                          <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                            <span className="text-primary mt-1">•</span>
+                            <span className="line-clamp-2">{topic}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {/* Gradiente sutil para indicar que há mais */}
+                      <div className="h-4 bg-gradient-to-b from-transparent to-white opacity-50"></div>
                     </div>
                   )}
+
                 </div>
 
+                {/* Botão Toggle */}
                 <button 
                   onClick={() => toggleExpand(doc.id)}
-                  className="w-full py-2 mt-2 text-xs font-bold text-primary uppercase tracking-wider border border-primary/20 rounded-lg hover:bg-primary/5 transition flex items-center justify-center gap-2"
+                  className={`w-full py-2.5 mt-2 text-xs font-bold uppercase tracking-wider rounded-lg transition flex items-center justify-center gap-2
+                    ${isExpanded 
+                      ? 'text-gray-500 hover:bg-gray-50' 
+                      : 'text-primary bg-primary/5 hover:bg-primary/10 border border-primary/10'}
+                  `}
                 >
                   {isExpanded ? (
-                    <>Recolher <svg className="w-3 h-3 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
+                    <>Fechar Visualização <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg></>
                   ) : (
-                    <>Leia Mais & Acessar PDF <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
+                    <>Leia Mais <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
                   )}
                 </button>
 
@@ -293,12 +314,12 @@ export default function Biblioteca() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="p-6">
-              <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-900">Adicionar Documento</h3><button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button></div>
+              <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-900">Novo Documento</h3><button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button></div>
               <div className="space-y-4">
-                <div className="bg-purple-50 border border-purple-100 p-3 rounded-lg">
-                  <p className="text-xs text-purple-700 font-medium flex items-start gap-2">
-                    <span className="text-base">🤖</span>
-                    O conteúdo deste PDF será lido automaticamente pela Norma para responder dúvidas dos moradores.
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                  <p className="text-xs text-blue-800 flex items-start gap-2">
+                    <span className="text-lg">🧠</span>
+                    <strong>Inteligência Ativa:</strong> Ao enviar, a Norma lerá este documento automaticamente para responder dúvidas no chat.
                   </p>
                 </div>
 
@@ -314,10 +335,10 @@ export default function Biblioteca() {
                   <label className="block text-sm font-bold text-gray-700 mb-2">Arquivo PDF</label>
                   <input type="file" accept=".pdf" ref={fileInputRef} className="hidden" onChange={onFileSelect} />
                   <div onClick={() => fileInputRef.current?.click()} className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${selectedFile ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-primary hover:bg-gray-50'}`}>
-                    {selectedFile ? (<div className="text-green-700"><div className="text-2xl mb-1">📄</div><p className="font-bold text-sm truncate">{selectedFile.name}</p></div>) : (<div className="text-gray-500"><div className="text-2xl mb-1">📤</div><p className="font-medium text-sm">Clique para selecionar PDF</p></div>)}
+                    {selectedFile ? (<div className="text-green-700"><div className="text-2xl mb-1">📄</div><p className="font-bold text-sm truncate">{selectedFile.name}</p></div>) : (<div className="text-gray-500"><div className="text-2xl mb-1">📤</div><p className="font-medium text-sm">Toque para selecionar PDF</p></div>)}
                   </div>
                 </div>
-                <button onClick={handleUpload} disabled={!selectedFile || uploading} className="w-full bg-primary text-white py-3 rounded-xl font-bold shadow-lg hover:bg-primary-dark transition disabled:opacity-50">{uploading ? 'Processando Inteligência...' : 'Enviar e Ensinar Norma'}</button>
+                <button onClick={handleUpload} disabled={!selectedFile || uploading} className="w-full bg-primary text-white py-3.5 rounded-xl font-bold shadow-lg hover:bg-primary-dark transition disabled:opacity-50">{uploading ? 'Processando...' : 'Enviar Documento'}</button>
               </div>
             </div>
           </div>
