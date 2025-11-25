@@ -30,6 +30,16 @@ interface Documento {
   created_at: string
 }
 
+// Função auxiliar para limpar nomes de arquivos (Remove acentos e caracteres especiais)
+function sanitizeFileName(name: string) {
+  return name
+    .normalize('NFD')               // Separa acentos das letras
+    .replace(/[\u0300-\u036f]/g, '') // Remove os acentos
+    .replace(/\s+/g, '_')           // Troca espaços por underline
+    .replace(/[^a-zA-Z0-9._-]/g, '') // Remove qualquer coisa que não seja letra, número, ponto, underline ou traço
+    .toLowerCase()
+}
+
 export default function Biblioteca() {
   const { profile, canManage } = useAuth() // Usando o helper 'canManage' (Admin/Sindico)
   const [docs, setDocs] = useState<Documento[]>([])
@@ -69,9 +79,14 @@ export default function Biblioteca() {
     setUploading(true)
     try {
       const categoryLabel = CATEGORIAS_DOCS.find(c => c.id === uploadCategory)?.label || 'Documento'
+      
+      // CORREÇÃO: Extrair texto ANTES do upload para garantir que o PDF é legível
       const textContent = await extractTextFromPDF(selectedFile)
       
-      const fileName = `${profile.condominio_id}/${Date.now()}_${selectedFile.name}`
+      // CORREÇÃO: Sanitizar nome do arquivo para evitar erro "Invalid Key"
+      const cleanName = sanitizeFileName(selectedFile.name)
+      const fileName = `${profile.condominio_id}/${Date.now()}_${cleanName}`
+
       const { error: uploadError } = await supabase.storage
         .from('biblioteca')
         .upload(fileName, selectedFile)
@@ -83,7 +98,7 @@ export default function Biblioteca() {
         .getPublicUrl(fileName)
 
       const { error: dbError } = await supabase.from('documents').insert({
-        title: selectedFile.name.replace('.pdf', ''),
+        title: selectedFile.name.replace('.pdf', ''), // Mantém título original para exibição
         content: textContent,
         tags: `${categoryLabel.toLowerCase()} ${uploadCategory} pdf documento oficial`,
         condominio_id: profile.condominio_id,
@@ -181,7 +196,7 @@ export default function Biblioteca() {
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Categoria</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {CATEGORIAS_DOCS.map((cat) => (
+                    {CATEGORIES_DOCS.map((cat) => (
                       <button key={cat.id} onClick={() => setUploadCategory(cat.id)} className={`text-xs font-semibold py-2 px-3 rounded-lg border text-left flex items-center gap-2 transition ${uploadCategory === cat.id ? `${cat.color} border-current ring-1 ring-current` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}><span>{cat.icon}</span> {cat.label}</button>
                     ))}
                   </div>
