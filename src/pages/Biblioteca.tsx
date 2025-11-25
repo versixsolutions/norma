@@ -6,7 +6,7 @@ import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 
-// CONSTANTE GLOBAL (Renomeada para evitar conflitos e padronizar)
+// CONSTANTE GLOBAL
 const CATEGORIAS_DOCS = [
   { id: 'atas', label: 'Atas de Assembleia', icon: '📝', color: 'bg-blue-100 text-blue-700' },
   { id: 'regimento', label: 'Regimento Interno', icon: '📜', color: 'bg-purple-100 text-purple-700' },
@@ -30,13 +30,12 @@ interface Documento {
   created_at: string
 }
 
-// Função auxiliar para limpar nomes de arquivos (Remove acentos e caracteres especiais)
 function sanitizeFileName(name: string) {
   return name
-    .normalize('NFD')               // Separa acentos das letras
-    .replace(/[\u0300-\u036f]/g, '') // Remove os acentos
-    .replace(/\s+/g, '_')           // Troca espaços por underline
-    .replace(/[^a-zA-Z0-9._-]/g, '') // Remove qualquer coisa que não seja letra, número, ponto, underline ou traço
+    .normalize('NFD')               
+    .replace(/[\u0300-\u036f]/g, '') 
+    .replace(/\s+/g, '_')           
+    .replace(/[^a-zA-Z0-9._-]/g, '') 
     .toLowerCase()
 }
 
@@ -47,6 +46,9 @@ export default function Biblioteca() {
   const [uploading, setUploading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null)
+  
+  // Estado para controlar quais documentos estão expandidos (Set de IDs)
+  const [expandedDocs, setExpandedDocs] = useState<Set<number>>(new Set())
   
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [uploadCategory, setUploadCategory] = useState('atas')
@@ -70,6 +72,18 @@ export default function Biblioteca() {
       if (error) throw error
       setDocs(data || [])
     } catch (error) { console.error(error) } finally { setLoading(false) }
+  }
+
+  const toggleExpand = (id: number) => {
+    setExpandedDocs(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
   }
 
   const handleUpload = async () => {
@@ -156,7 +170,6 @@ export default function Biblioteca() {
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button onClick={() => setSelectedFilter(null)} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition shrink-0 ${!selectedFilter ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>Todos</button>
-          {/* CORREÇÃO: Usando CATEGORIAS_DOCS em português consistentemente */}
           {CATEGORIAS_DOCS.map((cat) => (
             <button key={cat.id} onClick={() => setSelectedFilter(cat.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition shrink-0 flex items-center gap-1 ${selectedFilter === cat.id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 hover:bg-gray-50'}`}><span>{cat.icon}</span> {cat.label}</button>
           ))}
@@ -167,14 +180,88 @@ export default function Biblioteca() {
         <div className="grid gap-4">
           {filteredDocs.map((doc) => {
             const category = CATEGORIAS_DOCS.find(c => c.id === doc.metadata?.category) || CATEGORIAS_DOCS[6]
+            const isExpanded = expandedDocs.has(doc.id)
+            
+            // Resumo: Pega os primeiros 180 caracteres
+            const summary = doc.content.slice(0, 180).replace(/\s+/g, ' ') + (doc.content.length > 180 ? '...' : '')
+
             return (
-              <div key={doc.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-primary transition group relative overflow-hidden">
+              <div key={doc.id} className={`bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-primary transition group relative overflow-hidden ${isExpanded ? 'ring-2 ring-primary ring-opacity-50' : ''}`}>
+                
+                {/* Header do Card */}
                 <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-2"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${category.color}`}>{category.icon} {category.label}</span></div>
-                  {doc.metadata?.url && (<a href={doc.metadata.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-primary transition p-1 rounded-full hover:bg-gray-50" title="Baixar PDF"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></a>)}
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${category.color}`}>
+                      {category.icon} {category.label}
+                    </span>
+                  </div>
+                  {/* Botão de Download só aparece se expandido */}
+                  {isExpanded && doc.metadata?.url && (
+                    <a 
+                      href={doc.metadata.url} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-gray-400 hover:text-primary transition p-1 rounded-full hover:bg-gray-50 animate-fade-in" 
+                      title="Baixar PDF Completo"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </a>
+                  )}
                 </div>
+
                 <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1">{doc.title || doc.metadata?.title}</h3>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 h-20 overflow-hidden relative group-hover:bg-blue-50/30 transition-colors"><p className="text-xs text-gray-500 leading-relaxed font-mono break-words">{doc.content.slice(0, 300)}...</p><div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent group-hover:from-[#F0F9FF]"></div></div>
+                
+                {/* Conteúdo Condicional */}
+                <div className={`bg-gray-50 p-3 rounded-lg border border-gray-100 relative transition-all duration-300 ${isExpanded ? 'bg-white border-gray-200' : 'h-auto'}`}>
+                  
+                  {isExpanded ? (
+                    // Conteúdo Expandido (Exibe mais texto + Link)
+                    <div className="animate-fade-in">
+                       {/* Exibe um trecho maior, mas ainda não tudo se for gigante, para não quebrar layout */}
+                       <p className="text-sm text-gray-700 leading-relaxed font-mono whitespace-pre-line mb-4">
+                         {doc.content.slice(0, 1000)}
+                         {doc.content.length > 1000 && <span className="text-gray-400 italic"> (conteúdo truncado para visualização)</span>}
+                       </p>
+                       
+                       <div className="flex justify-end pt-2 border-t border-gray-100">
+                          {doc.metadata?.url && (
+                            <a 
+                              href={doc.metadata.url} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary-dark transition shadow-sm"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              Abrir PDF Completo
+                            </a>
+                          )}
+                       </div>
+                    </div>
+                  ) : (
+                    // Resumo (Estado Recolhido)
+                    <div>
+                      <p className="text-xs text-gray-500 leading-relaxed font-mono break-words">
+                        {summary}
+                      </p>
+                      {/* Gradiente para indicar continuidade */}
+                      <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none"></div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Botão de Toggle (Leia Mais / Menos) */}
+                <button 
+                  onClick={() => toggleExpand(doc.id)}
+                  className="mt-3 text-xs font-bold text-primary hover:text-primary-dark flex items-center gap-1 hover:underline focus:outline-none"
+                >
+                  {isExpanded ? (
+                    <>Ler menos <svg className="w-3 h-3 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
+                  ) : (
+                    <>Leia mais e acesse o PDF <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
+                  )}
+                </button>
+
               </div>
             )
           })}
@@ -190,7 +277,6 @@ export default function Biblioteca() {
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Categoria</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {/* CORREÇÃO: Usando CATEGORIAS_DOCS aqui também */}
                     {CATEGORIAS_DOCS.map((cat) => (
                       <button key={cat.id} onClick={() => setUploadCategory(cat.id)} className={`text-xs font-semibold py-2 px-3 rounded-lg border text-left flex items-center gap-2 transition ${uploadCategory === cat.id ? `${cat.color} border-current ring-1 ring-current` : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}><span>{cat.icon}</span> {cat.label}</button>
                     ))}
