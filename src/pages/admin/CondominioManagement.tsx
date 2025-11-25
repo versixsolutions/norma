@@ -1,13 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { extractTextFromPDF } from '../../lib/pdfUtils'
-import PageLayout from '../../components/PageLayout' // Caminho corrigido se necessário, verifique se PageLayout está em ../../components
+import PageLayout from '../../components/PageLayout' // Caminho corrigido
 import LoadingSpinner from '../../components/LoadingSpinner'
 import EmptyState from '../../components/EmptyState'
 import Modal from '../../components/ui/Modal'
 import toast from 'react-hot-toast'
-
-// ... (Interfaces e INITIAL_FORM mantidos iguais)
 
 interface Condominio {
   id: string
@@ -50,10 +47,8 @@ export default function CondominioManagement() {
   const [condominios, setCondominios] = useState<Condominio[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isProcessingPdf, setIsProcessingPdf] = useState(false)
+  const [isSearchingCnpj, setIsSearchingCnpj] = useState(false)
   const [formData, setFormData] = useState(INITIAL_FORM)
-  
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadCondominios()
@@ -77,133 +72,60 @@ export default function CondominioManagement() {
     }
   }
 
-  // --- PARSER ROBUSTO DA RECEITA FEDERAL ---
-  const parseReceitaPDF = (text: string) => {
-    // 1. Limpeza agressiva para normalizar espaços e remover quebras de linha
-    // Substitui qualquer sequência de whitespace por um único espaço
-    const cleanText = text.replace(/\s+/g, ' ').trim()
-    console.log("Texto Extraído (Clean):", cleanText)
-
-    // Helper para extrair texto entre dois marcadores
-    const extractField = (startRegex: RegExp, stopRegexes: RegExp[]) => {
-      const match = cleanText.match(startRegex)
-      if (!match || !match.index) return ''
-      
-      const startIndex = match.index + match[0].length
-      const textAfterStart = cleanText.slice(startIndex)
-      
-      let bestStopIndex = textAfterStart.length
-      
-      // Procura o marcador de parada mais próximo
-      stopRegexes.forEach(stopRegex => {
-        const stopMatch = textAfterStart.match(stopRegex)
-        if (stopMatch && stopMatch.index !== undefined && stopMatch.index < bestStopIndex) {
-          bestStopIndex = stopMatch.index
-        }
-      })
-
-      // Limpa o resultado: remove asteriscos e trim
-      return textAfterStart.slice(0, bestStopIndex).trim().replace(/[*]+/g, '') 
-    }
-
-    // 2. Extração de Campos
-
-    // CNPJ: Regex ultra flexível. Procura padrão XX . XXX . XXX / XXXX - XX
-    // Aceita pontos, vírgulas ou espaços entre os grupos numéricos
-    // Ex: 08.610,757/0007-02 ou 08 610 757 / 0007 - 02
-    const cnpjMatch = cleanText.match(/(\d{2})[\.\,\s]*(\d{3})[\.\,\s]*(\d{3})[\.\,\s]*\/[\.\,\s]*(\d{4})[\.\,\s-]*(\d{2})/)
+  // --- BUSCA CNPJ VIA BRASILAPI ---
+  const handleCnpjSearch = async () => {
+    const cleanCnpj = formData.cnpj.replace(/\D/g, '')
     
-    let cnpj = ''
-    if (cnpjMatch) {
-        // Reconstrói o CNPJ limpo: XX.XXX.XXX/XXXX-XX
-        cnpj = `${cnpjMatch[1]}.${cnpjMatch[2]}.${cnpjMatch[3]}/${cnpjMatch[4]}-${cnpjMatch[5]}`
+    if (cleanCnpj.length !== 14) {
+      toast.error('CNPJ inválido. Digite apenas números (14 dígitos).')
+      return
     }
 
-    // Razão Social
-    const razaoSocial = extractField(/NOME EMPRESARIAL\s+/i, [/TÍTULO DO ESTABELECIMENTO/i, /PORTE/i, /TITULO/i])
-    
-    // Nome Fantasia
-    const nomeFantasia = extractField(/NOME DE FANTASIA\)\s+/i, [/PORTE/i, /CÓDIGO E DESCRIÇÃO/i])
-
-    // Endereço
-    const logradouro = extractField(/LOGRADOURO\s+/i, [/CEP/i, /NÚMERO/i, /BAIRRO/i, /NUMERO/i])
-    const numero = extractField(/N[UÚ]MERO\s+/i, [/COMPLEMENTO/i, /MUNICÍPIO/i, /BAIRRO/i, /MUNICIPIO/i])
-    const bairro = extractField(/BAIRRO\/?\s*DISTRITO\s+/i, [/MUNICÍPIO/i, /CEP/i, /ENDEREÇO ELETRÔNICO/i, /MUNICIPIO/i])
-    const municipio = extractField(/MUNIC[IÍ]PIO\s+/i, [/UF/i, /TELEFONE/i])
-
-    // UF: Procura UF seguido de 2 letras maiúsculas, com segurança de borda
-    const ufMatch = cleanText.match(/\bUF\s+([A-Z]{2})\b/i)
-    const uf = ufMatch ? ufMatch[1] : ''
-
-    // Contatos
-    let email = extractField(/ENDEREÇO ELETRÔNICO\s+/i, [/TELEFONE/i, /ENTE FEDERATIVO/i])
-    // Fallback para email: procura padrão @ se o extrator falhar
-    if (!email.includes('@')) {
-      const emailRegexMatch = cleanText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/)
-      if (emailRegexMatch) email = emailRegexMatch[0]
-    }
-
-    const telefone = extractField(/TELEFONE\s+/i, [/ENTE FEDERATIVO/i, /SITUAÇÃO CADASTRAL/i, /SITUACAO/i])
-
-    // Lógica de Nome de Exibição
-    const displayName = (nomeFantasia && nomeFantasia.length > 2 && !nomeFantasia.includes('***')) 
-        ? nomeFantasia 
-        : razaoSocial
-
-    // Monta endereço completo
-    const addressParts = []
-    if (logradouro) addressParts.push(logradouro)
-    if (numero && !numero.includes('***')) addressParts.push(numero)
-    if (bairro) addressParts.push(bairro)
-
-    return {
-      cnpj,
-      razaoSocial,
-      name: displayName,
-      address: addressParts.join(', '),
-      city: municipio,
-      state: uf,
-      email: email.toLowerCase(),
-      phone: telefone
-    }
-  }
-
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return
-    const file = e.target.files[0]
-    
-    setIsProcessingPdf(true)
-    const toastId = toast.loading('Lendo Cartão CNPJ...')
+    setIsSearchingCnpj(true)
+    const toastId = toast.loading('Consultando Receita Federal...')
 
     try {
-      const text = await extractTextFromPDF(file)
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`)
       
-      if (!text || text.trim().length < 50) {
-          throw new Error('O PDF parece estar vazio ou ilegível (imagem?). Tente um PDF de texto selecionável.')
+      if (!response.ok) {
+        if (response.status === 404) throw new Error('CNPJ não encontrado.')
+        if (response.status === 429) throw new Error('Muitas requisições. Tente novamente em instantes.')
+        throw new Error('Erro ao consultar CNPJ.')
       }
 
-      const extractedData = parseReceitaPDF(text)
+      const data = await response.json()
 
-      // VALIDAÇÃO
-      if (!extractedData.cnpj) {
-        console.warn("Falha na extração de CNPJ. Texto bruto:", text)
-        throw new Error('Não foi possível encontrar um CNPJ válido. Verifique se é o documento correto.')
-      }
+      // Formata endereço
+      const address = `${data.logradouro}, ${data.numero} ${data.complemento || ''} - ${data.bairro}`
+      
+      // Define nome de exibição (Fantasia ou Razão Social)
+      const displayName = data.nome_fantasia || data.razao_social
+      
+      // Gera slug sugerido
+      const suggestedSlug = displayName
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[^a-z0-9]/g, '') // Remove caracteres especiais
 
       setFormData(prev => ({
         ...prev,
-        ...extractedData,
-        // Gera slug apenas se não houver um definido
-        slug: !prev.slug ? (extractedData.name ? extractedData.name.toLowerCase().replace(/[^a-z0-9]/g, '') : '') : prev.slug
+        razaoSocial: data.razao_social,
+        name: displayName, // Nome Fantasia
+        address: address,
+        city: data.municipio,
+        state: data.uf,
+        email: data.email || '',
+        phone: data.ddd_telefone_1 || '',
+        slug: !prev.slug ? suggestedSlug : prev.slug // Só preenche se estiver vazio
       }))
 
-      toast.success('Dados extraídos com sucesso!', { id: toastId })
+      toast.success('Dados preenchidos com sucesso!', { id: toastId })
+
     } catch (error: any) {
       console.error(error)
-      toast.error(error.message || 'Falha ao processar PDF', { id: toastId })
+      toast.error(error.message || 'Falha na consulta', { id: toastId })
     } finally {
-      setIsProcessingPdf(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      setIsSearchingCnpj(false)
     }
   }
 
@@ -305,52 +227,63 @@ export default function CondominioManagement() {
         </div>
       )}
 
+      {/* MODAL DE CRIAÇÃO */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Novo Condomínio"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* SECTION 1: DADOS BÁSICOS VIA API */}
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-bold text-blue-900 text-sm">1. Dados Cadastrais</h4>
-              
-              <div>
-                <input 
-                  type="file" 
-                  accept=".pdf" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  onChange={handlePdfUpload} 
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessingPdf}
-                  className="bg-white text-blue-600 text-xs font-bold px-3 py-1.5 rounded border border-blue-200 hover:bg-blue-50 transition flex items-center gap-2 shadow-sm"
-                >
-                  {isProcessingPdf ? 'Lendo...' : '📄 Importar Cartão CNPJ'}
-                </button>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              {/* CAMPO DE BUSCA CNPJ */}
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-gray-600 mb-1">Nome Fantasia (Exibição)</label>
-                <input required type="text" className="w-full px-3 py-2 border rounded-lg text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Pinheiro Park" />
+                <label className="block text-xs font-bold text-gray-600 mb-1">CNPJ (apenas números)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.cnpj} 
+                    onChange={e => setFormData({...formData, cnpj: e.target.value})} 
+                    placeholder="00000000000191"
+                    maxLength={18}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCnpjSearch}
+                    disabled={isSearchingCnpj || !formData.cnpj}
+                    className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSearchingCnpj ? '...' : '🔍 Buscar'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1 ml-1">Preenchimento automático via Receita Federal</p>
               </div>
+
               <div className="col-span-2">
                 <label className="block text-xs font-bold text-gray-600 mb-1">Razão Social</label>
                 <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm bg-white" value={formData.razaoSocial} onChange={e => setFormData({...formData, razaoSocial: e.target.value})} />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">CNPJ</label>
-                <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm bg-white" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} />
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-gray-600 mb-1">Nome Fantasia (Exibição)</label>
+                <input required type="text" className="w-full px-3 py-2 border rounded-lg text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Pinheiro Park" />
               </div>
+              
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1">Slug (URL)</label>
                 <input required type="text" className="w-full px-3 py-2 border rounded-lg text-sm bg-white font-mono" value={formData.slug} onChange={e => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/\s/g, '')})} placeholder="ex: versix" />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">Telefone</label>
+                <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm bg-white" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+              </div>
+
               <div className="col-span-2">
                 <label className="block text-xs font-bold text-gray-600 mb-1">Endereço Completo</label>
                 <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm bg-white" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
@@ -366,6 +299,7 @@ export default function CondominioManagement() {
             </div>
           </div>
 
+          {/* SECTION 2: VISUAL */}
           <div>
             <h4 className="font-bold text-gray-900 text-sm mb-3">2. Identidade Visual</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -390,6 +324,7 @@ export default function CondominioManagement() {
             </div>
           </div>
 
+          {/* SECTION 3: ESTRUTURA & MÓDULOS */}
           <div>
             <h4 className="font-bold text-gray-900 text-sm mb-3">3. Configuração</h4>
             <div className="grid grid-cols-2 gap-4 mb-4">
