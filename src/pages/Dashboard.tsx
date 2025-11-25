@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 // Interface unificada para o feed de atualizações
 interface DashboardUpdate {
   id: string
-  type: 'comunicado' | 'despesa' | 'ocorrencia' | 'votacao' | 'faq'
+  type: 'comunicado' | 'despesa' | 'ocorrencia' | 'votacao' | 'faq' | 'documento'
   title: string
   description: string
   date: string
@@ -26,7 +26,6 @@ export default function Dashboard() {
   const [updates, setUpdates] = useState<DashboardUpdate[]>([])
   const [loadingUpdates, setLoadingUpdates] = useState(true)
   
-  // Ref para controlar o scroll horizontal
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -35,10 +34,9 @@ export default function Dashboard() {
     }
   }, [profile?.condominio_id])
 
-  // Função para rolar os cards horizontalmente (apenas Desktop via botão)
   const scrollCards = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
-      const scrollAmount = 220 // Largura do card + gap
+      const scrollAmount = 220
       scrollContainerRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
@@ -49,7 +47,6 @@ export default function Dashboard() {
   async function loadUnifiedFeed() {
     setLoadingUpdates(true)
     
-    // Helper para buscar dados de forma segura
     const fetchData = async (table: string, queryBuilder: any) => {
       try {
         const { data, error } = await queryBuilder
@@ -65,8 +62,8 @@ export default function Dashboard() {
     }
 
     try {
-      // PERFORMANCE: Executa todas as queries em paralelo!
-      const [comunicados, despesas, ocorrencias, votacoes, faqs] = await Promise.all([
+      // Adicionado fetch de 'documents'
+      const [comunicados, despesas, ocorrencias, votacoes, faqs, documentos] = await Promise.all([
         fetchData('comunicados', 
           supabase.from('comunicados')
             .select('*')
@@ -101,12 +98,23 @@ export default function Dashboard() {
             .eq('condominio_id', profile?.condominio_id)
             .order('created_at', { ascending: false })
             .limit(3)
+        ),
+        fetchData('documents',
+          supabase.from('documents')
+            .select('id, title, created_at, metadata')
+            .eq('condominio_id', profile?.condominio_id)
+            .order('created_at', { ascending: false })
+            .limit(5)
         )
       ])
 
       const newUpdates: DashboardUpdate[] = []
 
       comunicados?.forEach((c: any) => {
+        // Filtra comunicados automáticos de documentos para não duplicar no feed
+        // (Opcional: remova o if se quiser que apareça o aviso E o documento)
+        if (c.title.startsWith('Novo Documento:')) return;
+
         const isUrgent = c.priority === 'urgente' || c.type === 'urgente' || c.priority >= 3
         newUpdates.push({
           id: `com-${c.id}`,
@@ -119,6 +127,21 @@ export default function Dashboard() {
           bgColor: isUrgent ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100',
           link: '/comunicados',
           isPinned: isUrgent
+        })
+      })
+
+      // Mapeamento dos Documentos (Histórico)
+      documentos?.forEach((d: any) => {
+        newUpdates.push({
+          id: `doc-${d.id}`,
+          type: 'documento',
+          title: d.title || d.metadata?.title || 'Novo Documento',
+          description: `Adicionado à Biblioteca (${d.metadata?.category || 'Geral'})`,
+          date: d.created_at,
+          icon: '📂',
+          color: 'text-indigo-600',
+          bgColor: 'bg-indigo-50 border-indigo-100',
+          link: '/biblioteca'
         })
       })
 
@@ -209,7 +232,6 @@ export default function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       
-      {/* Saudação */}
       <div className="mb-6">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
           Olá, {profile?.full_name?.split(' ')[0]}! 👋
@@ -219,104 +241,38 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Container de Cards com Setas de Navegação (Apenas Desktop) */}
+      {/* ... (Container de Cards Stat mantido igual) ... */}
       <div className="relative group mb-8">
-        
-        {/* Botão Seta Esquerda (Desktop) */}
-        <button 
-          onClick={() => scrollCards('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -ml-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100"
-        >
+        <button onClick={() => scrollCards('left')} className="absolute left-0 top-1/2 -translate-y-1/2 -ml-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
-
-        {/* Botão Seta Direita (Desktop) */}
-        <button 
-          onClick={() => scrollCards('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 -mr-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100"
-        >
+        <button onClick={() => scrollCards('right')} className="absolute right-0 top-1/2 -translate-y-1/2 -mr-4 z-20 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg text-gray-600 hover:text-primary hidden md:flex items-center justify-center hover:scale-110 transition border border-gray-100 opacity-0 group-hover:opacity-100">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
         </button>
-
-        {/* Lista de Cards Scrollável */}
-        <div 
-          ref={scrollContainerRef}
-          className="
-            flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-3 pb-4
-            scrollbar-hide scroll-smooth
-          "
-        >
-          {/* CARD 1: Comunicados */}
+        <div ref={scrollContainerRef} className="flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-3 pb-4 scrollbar-hide scroll-smooth">
           <div onClick={() => navigate('/comunicados')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1 relative overflow-hidden">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl">📢</div>
-              {stats.comunicados.nao_lidos > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">
-                  {stats.comunicados.nao_lidos} NOVOS
-                </span>
-              )}
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Comunicados</h3>
-            <p className="text-xs text-gray-500">Mural de avisos</p>
+            <div className="flex items-center justify-between mb-2"><div className="text-3xl">📢</div>{stats.comunicados.nao_lidos > 0 && (<span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm">{stats.comunicados.nao_lidos} NOVOS</span>)}</div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Comunicados</h3><p className="text-xs text-gray-500">Mural de avisos</p>
           </div>
-
-          {/* CARD 2: FAQ */}
           <div onClick={() => navigate('/faq')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl">❓</div>
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-0.5">FAQ</h3>
-            <p className="text-2xl font-bold text-primary mb-0.5">{stats.faq.answeredThisMonth}</p>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold">Dúvidas respondidas</p>
+            <div className="flex items-center justify-between mb-2"><div className="text-3xl">❓</div></div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">FAQ</h3><p className="text-2xl font-bold text-primary mb-0.5">{stats.faq.answeredThisMonth}</p><p className="text-[10px] text-gray-400 uppercase font-semibold">Dúvidas respondidas</p>
           </div>
-
-          {/* CARD 3: Transparência */}
           <div onClick={() => navigate('/transparencia')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl">💰</div>
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Transparência</h3>
-            <p className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(stats.despesas.totalMes)}</p>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold truncate">
-              Em {stats.despesas.monthLabel}
-            </p>
+            <div className="flex items-center justify-between mb-2"><div className="text-3xl">💰</div></div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Transparência</h3><p className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(stats.despesas.totalMes)}</p><p className="text-[10px] text-gray-400 uppercase font-semibold truncate">Em {stats.despesas.monthLabel}</p>
           </div>
-
-          {/* CARD 4: Assembleia */}
           <div onClick={() => navigate('/votacoes')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer relative transition-transform hover:-translate-y-1">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl">🗳️</div>
-              {stats.votacoes.ativas > 0 && (
-                <span className="bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                  ATIVAS
-                </span>
-              )}
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Assembleia Digital</h3>
-            <p className="text-2xl font-bold text-primary mb-0.5">{stats.votacoes.ativas}</p>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold">Em andamento</p>
+            <div className="flex items-center justify-between mb-2"><div className="text-3xl">🗳️</div>{stats.votacoes.ativas > 0 && (<span className="bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">ATIVAS</span>)}</div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Assembleia Digital</h3><p className="text-2xl font-bold text-primary mb-0.5">{stats.votacoes.ativas}</p><p className="text-[10px] text-gray-400 uppercase font-semibold">Em andamento</p>
           </div>
-
-          {/* CARD 5: Ocorrências */}
           <div onClick={() => navigate('/ocorrencias')} className="min-w-[200px] md:min-w-[220px] snap-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-lg cursor-pointer transition-transform hover:-translate-y-1">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-3xl">🚨</div>
-              {(stats.ocorrencias.abertas + stats.ocorrencias.em_andamento) > 0 && (
-                <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {stats.ocorrencias.abertas + stats.ocorrencias.em_andamento}
-                </span>
-              )}
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Ocorrências</h3>
-            <p className="text-xl font-bold text-orange-600 mb-0.5">
-              {stats.ocorrencias.abertas}
-            </p>
-            <p className="text-[10px] text-gray-400 uppercase font-semibold">Abertas agora</p>
+            <div className="flex items-center justify-between mb-2"><div className="text-3xl">🚨</div>{(stats.ocorrencias.abertas + stats.ocorrencias.em_andamento) > 0 && (<span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{stats.ocorrencias.abertas + stats.ocorrencias.em_andamento}</span>)}</div>
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Ocorrências</h3><p className="text-xl font-bold text-orange-600 mb-0.5">{stats.ocorrencias.abertas}</p><p className="text-[10px] text-gray-400 uppercase font-semibold">Abertas agora</p>
           </div>
         </div>
       </div>
 
-      {/* Últimas Atualizações */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg md:text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -348,12 +304,9 @@ export default function Dashboard() {
                     ${item.isPinned ? 'bg-yellow-50/50 hover:bg-yellow-50' : ''}
                   `}
                 >
-                  {/* Ícone */}
                   <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-lg md:text-xl shadow-sm ${item.bgColor}`}>
                     {item.icon}
                   </div>
-
-                  {/* Conteúdo */}
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
                       <h4 className={`text-sm font-bold truncate pr-2 ${item.color}`}>
