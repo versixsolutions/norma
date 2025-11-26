@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
-import Modal from '../components/ui/Modal' // <--- IMPORTAÇÃO QUE FALTAVA
+import Modal from '../components/ui/Modal'
 import toast from 'react-hot-toast'
 
 // Categorias de Documentos
@@ -28,6 +28,8 @@ interface Documento {
     url?: string
     category?: string
     is_chunk?: boolean
+    file_name?: string
+    processed_at?: string
   }
   created_at: string
 }
@@ -42,7 +44,7 @@ function sanitizeFileName(name: string) {
     .toLowerCase()
 }
 
-// Função de fragmentação de Markdown para visualização e IA
+// Função de fragmentação de Markdown para visualização
 function splitMarkdownIntoChunks(markdown: string, docTitle: string): string[] {
     const splitRegex = /(?=\n#{1,3}\s+)|(?=\n\*\*\s*Artigo)/;
     const rawChunks = markdown.split(splitRegex);
@@ -94,7 +96,11 @@ export default function Biblioteca() {
 
       if (error) throw error
       setDocs(data || [])
-    } catch (error) { console.error(error) } finally { setLoading(false) }
+    } catch (error) { 
+      console.error('Erro ao carregar documentos:', error) 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   const toggleExpand = (id: number) => {
@@ -119,6 +125,14 @@ export default function Biblioteca() {
       const categoryLabel = CATEGORIAS_DOCS.find(c => c.id === uploadCategory)?.label || 'Documento'
       const docTitle = selectedFile.name.replace('.pdf', '');
 
+      console.log('📤 Iniciando upload:', {
+        fileName: selectedFile.name,
+        size: selectedFile.size,
+        category: uploadCategory,
+        condominioId: profile.condominio_id
+      })
+
+      // ===== PASSO 1: UPLOAD PARA STORAGE =====
       toast.loading('Enviando arquivo para o cofre...', { id: toastId })
       const cleanName = sanitizeFileName(selectedFile.name)
       const fileName = `${profile.condominio_id}/${Date.now()}_${cleanName}`
@@ -127,246 +141,398 @@ export default function Biblioteca() {
         .from('biblioteca')
         .upload(fileName, selectedFile)
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('❌ Erro no upload:', uploadError)
+        throw uploadError
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('biblioteca')
         .getPublicUrl(fileName)
 
-      toast.loading('Norma está lendo e estruturando o documento...', { id: toastId })
+      console.log('✅ Upload concluído:', publicUrl)
+
+      // ===== PASSO 2: PROCESSAR COM IA (EDGE FUNCTION) =====
+      toast.loading('Norma está lendo e estruturando o documento com IA...', { id: toastId })
       
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('condominio_id', profile.condominio_id)
+      formData.append('category', uploadCategory)
+
+      console.log('🤖 Chamando Edge Function process-document...')
 
       const { data: processData, error: processError } = await supabase.functions.invoke('process-document', {
         body: formData,
       })
 
-      if (processError) throw processError;
-      
-      const textContent = processData.markdown;
+      console.log('📥 Resposta da Edge Function:', processData)
+
+      if (processError) {
+        console.error('❌ Erro na Edge Function:', processError)
+        throw new Error(`Erro ao processar: ${processError.message}`)
+      }
+
+      if (!processData?.success) {
+        console.error('❌ Processamento falhou:', processData)
+        throw new Error(processData?.error || 'Falha no processamento do documento')
+      }
+
+      const textContent = processData.markdown
 
       if (!textContent || textContent.length < 50) {
-         throw new Error('O sistema não conseguiu extrair texto suficiente deste PDF.');
+         console.error('❌ Texto extraído insuficiente:', textContent?.length)
+         throw new Error('O sistema não conseguiu extrair texto suficiente deste PDF.')
       }
 
-      toast.loading('Gerando inteligência (Embeddings)...', { id: toastId })
-      
-      const chunks = splitMarkdownIntoChunks(textContent, docTitle); 
+      console.log('✅ Texto extraído:', {
+        length: textContent.length,
+        preview: textContent.substring(0, 100)
+      })
 
-      const parentDoc = {
-        title: docTitle,
-        content: textContent, 
-        tags: `${categoryLabel.toLowerCase()} ${uploadCategory} pdf llamaparse`,
-        condominio_id: profile.condominio_id,
-        metadata: {
-          title: selectedFile.name,
-          source: categoryLabel,
-          category: uploadCategory,
-          url: publicUrl,
-          parser: 'llamaparse'
-        }
-      }
+      // ===== PASSO 3: SALVAR DOCUMENTO PRINCIPAL NO SUPABASE =====
+      toast.loading('Salvando na biblioteca...', { id: toastId })
 
-      const { data: parentData, error: parentError } = await supabase
+      const { data: docData, error: insertError } = await supabase
         .from('documents')
-        .insert(parentDoc)
+        .insert({
+          title: docTitle,
+          content: textContent,
+          condominio_id: profile.condominio_id,
+          metadata: {
+            title: docTitle,
+            source: 'upload',
+            url: publicUrl,
+            category: uploadCategory,
+            file_name: selectedFile.name,
+            processed_at: new Date().toISOString()
+          }
+        })
         .select()
         .single()
 
-      if (parentError) throw parentError
-      
-      const chunkSize = 3; 
-      let processed = 0;
-
-      for (let i = 0; i < chunks.length; i += chunkSize) {
-        const batch = chunks.slice(i, i + chunkSize);
-        const promises = batch.map(async (chunkText) => {
-           const { data: embedData, error: embedError } = await supabase.functions.invoke('ask-ai', {
-             body: { action: 'embed', text: chunkText }
-           })
-           
-           if (embedError) throw embedError
-           const embedding = embedData.embedding;
-           
-           return {
-             title: `${docTitle} (Trecho)`,
-             content: chunkText,
-             embedding: embedding, 
-             tags: `chunk ia_context ${uploadCategory}`,
-             condominio_id: profile.condominio_id,
-             metadata: {
-               source: categoryLabel,
-               category: uploadCategory,
-               is_chunk: true, 
-               parent_id: parentData.id 
-             }
-           }
-        });
-
-        const records = await Promise.all(promises);
-        const { error: chunkError } = await supabase.from('documents').insert(records);
-        if (chunkError) console.error('Erro ao salvar chunks:', chunkError);
-        
-        processed += batch.length;
-        toast.loading(`Indexando conhecimento: ${processed}/${chunks.length} tópicos...`, { id: toastId });
+      if (insertError) {
+        console.error('❌ Erro ao salvar documento:', insertError)
+        throw insertError
       }
 
-      await supabase.from('comunicados').insert({
-        title: `Novo Documento: ${docTitle}`,
-        content: `Um novo arquivo foi adicionado à Biblioteca Digital na categoria **${categoryLabel}**. \n\nA Norma já aprendeu o conteúdo e está pronta para tirar dúvidas.`,
-        type: 'informativo', 
-        priority: 1,
-        author_id: user?.id,
-        condominio_id: profile?.condominio_id
-      })
+      console.log('✅ Documento salvo no Supabase:', docData)
 
-      toast.success('Documento salvo e aprendido pela Norma!', { id: toastId })
+      // ===== PASSO 4: CRIAR CHUNKS PARA VISUALIZAÇÃO =====
+      const chunks = splitMarkdownIntoChunks(textContent, docTitle)
+      console.log(`📦 Criados ${chunks.length} chunks para visualização`)
+
+      // ===== SUCESSO =====
+      toast.success(
+        `✅ Documento "${docTitle}" processado com sucesso! ${processData.chunks_created || chunks.length} seções indexadas para a IA.`,
+        { id: toastId, duration: 5000 }
+      )
+
+      // Resetar formulário
       setIsModalOpen(false)
       setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      
+      // Recarregar lista
       loadDocs()
 
     } catch (error: any) {
-      console.error(error)
-      toast.error('Erro: ' + (error.message || 'Falha no processamento'), { id: toastId })
+      console.error('❌ Erro completo no upload:', error)
+      toast.error(
+        error.message || 'Erro ao processar documento. Tente novamente.', 
+        { id: toastId, duration: 6000 }
+      )
     } finally {
       setUploading(false)
     }
   }
 
-  const filteredDocs = docs.filter(d => {
-    const matchesSearch = d.content.toLowerCase().includes(searchTerm.toLowerCase()) || d.title.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedFilter ? d.metadata?.category === selectedFilter : true
+  const handleDelete = async (doc: Documento) => {
+    if (!confirm(`Tem certeza que deseja deletar "${doc.title}"?`)) return
+
+    const toastId = toast.loading('Deletando documento...')
+
+    try {
+      // Deletar do banco
+      const { error } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', doc.id)
+
+      if (error) throw error
+
+      // Deletar do storage se tiver URL
+      if (doc.metadata?.url) {
+        const filePath = doc.metadata.url.split('/').slice(-2).join('/')
+        await supabase.storage.from('biblioteca').remove([filePath])
+      }
+
+      toast.success('Documento deletado com sucesso', { id: toastId })
+      loadDocs()
+
+    } catch (error: any) {
+      console.error('Erro ao deletar:', error)
+      toast.error('Erro ao deletar documento', { id: toastId })
+    }
+  }
+
+  // Filtros
+  const filteredDocs = docs.filter(doc => {
+    const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         doc.content.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = !selectedFilter || doc.metadata?.category === selectedFilter
     return matchesSearch && matchesCategory
   })
 
-  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) setSelectedFile(e.target.files[0])
-  }
+  // Estatísticas por categoria
+  const categoryStats = CATEGORIAS_DOCS.map(cat => ({
+    ...cat,
+    count: docs.filter(d => d.metadata?.category === cat.id).length
+  }))
 
-  if (loading) return <LoadingSpinner message="Carregando biblioteca..." />
+  if (loading) {
+    return (
+      <PageLayout title="Biblioteca Digital">
+        <LoadingSpinner />
+      </PageLayout>
+    )
+  }
 
   return (
     <PageLayout 
       title="Biblioteca Digital" 
-      subtitle="Acervo de documentos oficiais" 
-      icon="📚"
-      headerAction={
-        canManage ? (
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg font-bold hover:bg-white/30 transition text-sm flex items-center gap-2 border border-white/30"
-          >
-            <span className="text-lg">+</span> Novo Documento
-          </button>
-        ) : null
-      }
+      subtitle="Documentos oficiais do condomínio indexados por IA"
     >
-      <div className="mb-6 space-y-4">
-        <div className="relative">
-          <input type="text" placeholder="Buscar nos documentos..." className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      {/* Header com busca e upload */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex-1 w-full">
+            <input
+              type="text"
+              placeholder="🔍 Buscar documentos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          
+          {canManage && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="whitespace-nowrap px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+            >
+              📤 Novo Documento
+            </button>
+          )}
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <button onClick={() => setSelectedFilter(null)} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition shrink-0 ${!selectedFilter ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>Todos</button>
-          {CATEGORIAS_DOCS.map((cat) => (
-            <button key={cat.id} onClick={() => setSelectedFilter(cat.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition shrink-0 flex items-center gap-1 ${selectedFilter === cat.id ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 hover:bg-gray-50'}`}><span>{cat.icon}</span> {cat.label}</button>
+
+        {/* Filtros por categoria */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedFilter(null)}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !selectedFilter 
+                ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-300' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Todos ({docs.length})
+          </button>
+          {categoryStats.map(cat => (
+            cat.count > 0 && (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedFilter(cat.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  selectedFilter === cat.id
+                    ? `${cat.color} border-2 border-current`
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {cat.icon} {cat.label} ({cat.count})
+              </button>
+            )
           ))}
         </div>
       </div>
 
-      {filteredDocs.length > 0 ? (
-        <div className="grid gap-4">
-          {filteredDocs.map((doc) => {
-            const category = CATEGORIAS_DOCS.find(c => c.id === doc.metadata?.category) || CATEGORIAS_DOCS[6]
+      {/* Lista de documentos */}
+      {filteredDocs.length === 0 ? (
+        <EmptyState
+          title={searchTerm ? "Nenhum documento encontrado" : "Biblioteca vazia"}
+          description={
+            searchTerm 
+              ? "Tente outro termo de busca" 
+              : canManage 
+                ? "Adicione o primeiro documento oficial do condomínio"
+                : "Aguarde o síndico adicionar documentos"
+          }
+        />
+      ) : (
+        <div className="space-y-4">
+          {filteredDocs.map(doc => {
+            const category = CATEGORIAS_DOCS.find(c => c.id === doc.metadata?.category)
             const isExpanded = expandedDocs.has(doc.id)
-            const topics = getVisualTopics(doc.content);
-            const cleanTopics = topics.length > 0 ? topics : [doc.content.slice(0, 100).replace(/\s+/g, ' ') + '...'];
+            const topics = getVisualTopics(doc.content)
 
             return (
-              <div key={doc.id} className={`bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:border-primary transition-all duration-300 group relative overflow-hidden ${isExpanded ? 'ring-2 ring-primary ring-opacity-50' : ''}`}>
-                
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${category.color}`}>
-                      {category.icon} {category.label}
-                    </span>
+              <div key={doc.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                {/* Header do documento */}
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        {category && (
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${category.color}`}>
+                            {category.icon} {category.label}
+                          </span>
+                        )}
+                        <span className="text-sm text-gray-500">
+                          {new Date(doc.created_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        {doc.title}
+                      </h3>
+
+                      {/* Preview de tópicos */}
+                      {topics.length > 0 && (
+                        <div className="text-sm text-gray-600 space-y-1 mb-3">
+                          {topics.map((topic, i) => (
+                            <div key={i} className="truncate">
+                              {topic.startsWith('#') ? '📌' : '▸'} {topic.replace(/^#+\s*/, '').replace(/^\*\*\s*/, '')}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>📄 {(doc.content.length / 1024).toFixed(1)} KB</span>
+                        {doc.metadata?.url && (
+                          <a
+                            href={doc.metadata.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-indigo-600 hover:text-indigo-700 font-medium"
+                          >
+                            📥 Download PDF
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleExpand(doc.id)}
+                        className="px-4 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg font-medium transition-colors"
+                      >
+                        {isExpanded ? '▲ Ocultar' : '▼ Ver conteúdo'}
+                      </button>
+                      
+                      {canManage && (
+                        <button
+                          onClick={() => handleDelete(doc)}
+                          className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+                        >
+                          🗑️ Deletar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-1">{doc.title || doc.metadata?.title}</h3>
-                
-                <div className={`relative transition-all duration-300`}>
-                  
-                  {isExpanded ? (
-                    <div className="animate-fade-in">
-                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4 max-h-96 overflow-y-auto custom-scrollbar">
-                         <p className="text-sm text-gray-700 leading-relaxed font-sans whitespace-pre-line">
-                           {doc.content}
-                         </p>
-                       </div>
-                       
-                       {doc.metadata?.url && (
-                          <a 
-                            href={doc.metadata.url} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-3 rounded-lg text-sm font-bold hover:bg-primary-dark transition shadow-md mb-2"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Abrir Documento PDF Original
-                          </a>
-                       )}
+                {/* Conteúdo expandido */}
+                {isExpanded && (
+                  <div className="border-t bg-gray-50 p-6">
+                    <div className="prose prose-sm max-w-none">
+                      <div 
+                        className="whitespace-pre-wrap text-gray-700"
+                        dangerouslySetInnerHTML={{
+                          __html: doc.content
+                            .replace(/^#{1,3}\s+(.+)$/gm, '<h3 class="font-bold text-lg mt-4 mb-2">$1</h3>')
+                            .replace(/^\*\*(.+?)\*\*/gm, '<strong>$1</strong>')
+                            .replace(/\n/g, '<br/>')
+                        }}
+                      />
                     </div>
-                  ) : (
-                    <div className="mb-2">
-                      <p className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wide">Principais Tópicos:</p>
-                      <ul className="space-y-2">
-                        {cleanTopics.map((topic, index) => (
-                          <li key={index} className="flex items-start gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">
-                            <span className="text-primary font-bold mt-0.5">•</span>
-                            <span className="line-clamp-2 font-medium">{topic.replace(/^#+\s*/, '').replace(/\*\*/g, '')}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
-                    </div>
-                  )}
-
-                </div>
-
-                <button 
-                  onClick={() => toggleExpand(doc.id)}
-                  className="w-full py-2 mt-3 text-xs font-bold text-primary uppercase tracking-wider border border-primary/20 rounded-lg hover:bg-primary/5 transition flex items-center justify-center gap-2"
-                >
-                  {isExpanded ? (
-                    <>Recolher <svg className="w-3 h-3 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
-                  ) : (
-                    <>Leia Mais & Acessar PDF <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></>
-                  )}
-                </button>
-
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
-      ) : (<EmptyState icon="📭" title="Nenhum documento" description="A biblioteca está vazia." />)}
+      )}
 
       {/* Modal de Upload */}
-      {isModalOpen && (
-        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Novo Documento Inteligente">
-            <div className="space-y-4">
-                <div className="bg-blue-50 p-3 rounded text-blue-800 text-xs">Este documento será lido e a Norma aprenderá o conteúdo automaticamente.</div>
-                <select className="w-full border p-2 rounded" value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}>
-                    {CATEGORIAS_DOCS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-                <input type="file" accept=".pdf" className="w-full" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
-                <button onClick={handleUpload} disabled={uploading || !selectedFile} className="w-full bg-primary text-white py-3 rounded-lg font-bold disabled:opacity-50">
-                    {uploading ? 'Processando...' : 'Enviar'}
-                </button>
-            </div>
-        </Modal>
-      )}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false)
+          setSelectedFile(null)
+        }}
+        title="Novo Documento Inteligente"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-800">
+              💡 Este documento será lido pela Norma e aprenderá o conteúdo automaticamente.
+            </p>
+          </div>
+
+          {/* Seletor de categoria */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Categoria do Documento
+            </label>
+            <select
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+            >
+              {CATEGORIAS_DOCS.map(cat => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Seletor de arquivo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Arquivo PDF
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+            {selectedFile && (
+              <p className="mt-2 text-sm text-gray-600">
+                📄 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
+              </p>
+            )}
+          </div>
+
+          {/* Botão de envio */}
+          <button
+            onClick={handleUpload}
+            disabled={!selectedFile || uploading}
+            className={`w-full py-3 rounded-lg font-medium transition-colors ${
+              !selectedFile || uploading
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+          >
+            {uploading ? '⏳ Processando...' : '📤 Enviar'}
+          </button>
+        </div>
+      </Modal>
     </PageLayout>
   )
 }
