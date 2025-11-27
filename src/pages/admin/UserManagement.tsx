@@ -5,6 +5,7 @@ import EmptyState from '../../components/EmptyState'
 import Modal from '../../components/ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAdmin } from '../../contexts/AdminContext'
+import toast from 'react-hot-toast'
 
 interface UserData {
   id: string
@@ -28,12 +29,13 @@ const ROLES = [
 
 export default function UserManagement() {
   const { user: currentUser, profile, isAdmin } = useAuth()
-  const { selectedCondominioId } = useAdmin() // Contexto Global
+  const { selectedCondominioId } = useAdmin() 
   
   const [users, setUsers] = useState<UserData[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'active'>('pending')
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserData | null>(null)
@@ -47,7 +49,6 @@ export default function UserManagement() {
   async function loadUsers() {
     setLoading(true)
     try {
-      // Filtra usuários pelo condomínio selecionado
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -74,30 +75,48 @@ export default function UserManagement() {
 
       if (error) throw error
       setUsers(prev => prev.map(u => u.id === id ? { ...u, role: 'morador' } : u))
+      toast.success('Usuário aprovado!')
     } catch (error: any) {
-      alert('Erro: ' + error.message)
+      toast.error('Erro: ' + error.message)
     } finally {
       setProcessingId(null)
     }
   }
 
-  async function handleReject(id: string) {
-    if (!confirm('Tem certeza? Isso removerá o cadastro.')) return
+  // NOVO: Função de Delete Hard (Chama Edge Function)
+  async function handleDeleteUser(id: string) {
+    if (!confirm('ATENÇÃO: Isso excluirá PERMANENTEMENTE o usuário do sistema e todos os seus dados vinculados (login, perfil, histórico). Esta ação é irreversível. Tem certeza?')) return
+
+    setIsDeleting(true)
     setProcessingId(id)
+    const toastId = toast.loading('Excluindo usuário...')
+
     try {
-      const { error } = await supabase.from('users').delete().eq('id', id)
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: id }
+      })
+
       if (error) throw error
+      if (data?.error) throw new Error(data.error)
+
       setUsers(prev => prev.filter(u => u.id !== id))
+      toast.success('Usuário deletado com sucesso!', { id: toastId })
+
     } catch (error: any) {
-      alert('Erro: ' + error.message)
+      console.error('Erro ao deletar:', error)
+      toast.error('Falha ao deletar: ' + error.message, { id: toastId })
     } finally {
+      setIsDeleting(false)
       setProcessingId(null)
     }
   }
+
+  // Função antiga de Reject (apenas deletava da tabela public, não do Auth - agora substituída ou mantida como "soft delete" se preferir, mas recomendo usar o hard delete para limpeza real)
+  // Vamos substituir o botão de "Rejeitar" (X vermelho) para usar o handleDeleteUser também, pois se rejeitou, o cadastro está errado e deve sumir do Auth para liberar o email.
 
   function openEditModal(targetUser: UserData) {
     if (!isAdmin && targetUser.role === 'admin') {
-      alert('Apenas Super Administradores podem editar outros Administradores.')
+      toast.error('Apenas Super Administradores podem editar outros Administradores.')
       return
     }
     setEditingUser({ ...targetUser })
@@ -109,7 +128,7 @@ export default function UserManagement() {
     if (!editingUser || !currentUser) return
 
     if (!isAdmin && editingUser.role === 'admin') {
-      alert('Você não tem permissão para promover usuários a Administrador.')
+      toast.error('Você não tem permissão para promover usuários a Administrador.')
       return
     }
 
@@ -130,10 +149,10 @@ export default function UserManagement() {
       setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u))
       setIsEditModalOpen(false)
       setEditingUser(null)
-      alert('Dados atualizados com sucesso!')
+      toast.success('Dados atualizados!')
 
     } catch (error: any) {
-      alert('Erro ao salvar: ' + error.message)
+      toast.error('Erro ao salvar: ' + error.message)
     } finally {
       setProcessingId(null)
     }
@@ -200,15 +219,44 @@ export default function UserManagement() {
                     <td className="px-6 py-4 text-right">
                       {user.role === 'pending' ? (
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => handleReject(user.id)} className="text-red-600 hover:bg-red-50 p-2 rounded" title="Rejeitar"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                          <button onClick={() => handleApprove(user.id)} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-green-700 transition">Aprovar</button>
+                          {/* Botão Rejeitar agora faz DELETE TOTAL */}
+                          <button 
+                            onClick={() => handleDeleteUser(user.id)} 
+                            disabled={processingId === user.id}
+                            className="text-red-600 hover:bg-red-50 p-2 rounded border border-transparent hover:border-red-100 transition" 
+                            title="Rejeitar e Excluir Cadastro"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleApprove(user.id)} 
+                            disabled={processingId === user.id}
+                            className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-green-700 transition flex items-center gap-1"
+                          >
+                            {processingId === user.id ? '...' : 'Aprovar'}
+                          </button>
                         </div>
                       ) : (
-                        (!isAdmin && user.role === 'admin') ? (
-                          <span className="text-xs text-gray-400 italic">Protegido</span>
-                        ) : (
-                          <button onClick={() => openEditModal(user)} className="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded text-sm font-medium transition">Editar</button>
-                        )
+                        <div className="flex justify-end gap-2 items-center">
+                            {(!isAdmin && user.role === 'admin') ? (
+                              <span className="text-xs text-gray-400 italic">Protegido</span>
+                            ) : (
+                              <>
+                                <button onClick={() => openEditModal(user)} className="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded text-sm font-medium transition">Editar</button>
+                                
+                                {/* Botão de Exclusão para usuários ativos também */}
+                                <button 
+                                    onClick={() => handleDeleteUser(user.id)}
+                                    disabled={processingId === user.id}
+                                    className="text-red-500 hover:bg-red-50 p-1.5 rounded transition"
+                                    title="Excluir Usuário"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </>
+                            )}
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -221,7 +269,7 @@ export default function UserManagement() {
 
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Usuário">
         {editingUser && (
-          <form onSubmit={handleSaveEdit} className="space-y-4">
+          <form onSubmit={handleSaveUpdate} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
               <input type="text" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={editingUser.full_name} onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })} />
@@ -252,7 +300,7 @@ export default function UserManagement() {
             </div>
             <div className="pt-4 flex gap-3">
               <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50">Cancelar</button>
-              <button type="submit" disabled={!!processingId} className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md disabled:opacity-50">{processingId ? 'Salvando...' : 'Salvar Alterações'}</button>
+              <button type="submit" disabled={!!processingId} className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md">{processingId ? 'Salvando...' : 'Salvar Alterações'}</button>
             </div>
           </form>
         )}
