@@ -7,12 +7,12 @@ interface UserProfile {
   id: string
   email: string
   full_name: string | null
-  first_name?: string | null // Novo
-  last_name?: string | null // Novo
+  first_name?: string | null
+  last_name?: string | null
   role: UserRole
   phone: string | null
   unit_number: string | null
-  block?: string | null // Novo
+  block?: string | null
   resident_type: string | null
   is_whatsapp: boolean | null
   condominio_id: string | null
@@ -25,8 +25,9 @@ interface AuthContextType {
   profile: UserProfile | null
   session: Session | null
   loading: boolean
+  authError: string | null // Novo estado para erros de integridade
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (data: any) => Promise<void> // Simplificado para any ou tipar com SignupFormData
+  signUp: (data: any) => Promise<void>
   signOut: () => Promise<void>
   isAdmin: boolean
   isSindico: boolean
@@ -43,8 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Verifica sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
@@ -55,13 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
+    // Escuta mudanças de estado (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
+      
       if (session?.user) {
+        // Se usuário logou, carrega perfil
         loadProfile(session.user.id)
       } else {
+        // Se deslogou, limpa tudo
         setProfile(null)
+        setAuthError(null)
         setLoading(false)
       }
     })
@@ -71,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(userId: string) {
     try {
+      setAuthError(null) // Limpa erros anteriores
+      
       const { data, error } = await supabase
         .from('users')
         .select('*, condominios(name)')
@@ -87,9 +97,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: (data.role as UserRole) || 'morador' 
         }
         setProfile(mappedProfile)
+      } else {
+        // CORREÇÃO CRÍTICA: Se não achou perfil, define erro e limpa perfil anterior
+        console.error('Erro de Integridade: Usuário autenticado sem perfil público.')
+        setProfile(null)
+        setAuthError('Perfil de usuário não encontrado. Entre em contato com o suporte.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar perfil:', error)
+      setAuthError(error.message || 'Erro ao carregar dados do usuário')
     } finally {
       setLoading(false)
     }
@@ -100,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }
 
-  // ATUALIZADO: Recebe objeto completo
   async function signUp(formData: {
     email: string, 
     password: string, 
@@ -120,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: formData.password,
       options: {
         data: {
-          full_name: fullName, // Mantém retrocompatibilidade
+          full_name: fullName,
           first_name: formData.firstName,
           last_name: formData.lastName,
           condominio_id: formData.condominioId,
@@ -146,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null)
       setUser(null)
       setSession(null)
+      setAuthError(null)
       localStorage.clear()
     }
   }
@@ -157,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     session,
     loading,
+    authError, // Exportando o erro
     signIn,
     signUp,
     signOut,

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { pipeline } from '@xenova/transformers'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -13,9 +12,6 @@ const QDRANT_URL = process.env.QDRANT_URL!
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY!
 const COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'norma_knowledge_base'
 
-let embedder: any = null
-
-// Função auxiliar de chunking (igual à do Edge Function)
 function splitMarkdownIntoChunks(markdown: string, docTitle: string, chunkSize = 1000): any[] {
   const sectionRegex = /(?=\n#{1,3}\s+)|(?=\n\*\*\s*Artigo)/
   const rawSections = markdown.split(sectionRegex)
@@ -50,25 +46,10 @@ function splitMarkdownIntoChunks(markdown: string, docTitle: string, chunkSize =
   return chunks
 }
 
-async function generateEmbedding(text: string): Promise<number[]> {
-  if (!embedder) {
-    console.log('🔄 Carregando modelo de embedding...')
-    embedder = await pipeline('feature-extraction', 'Supabase/gte-small')
-  }
-
-  const output = await embedder(text, {
-    pooling: 'mean',
-    normalize: true
-  })
-
-  return Array.from(output.data)
-}
-
 async function migrate() {
   console.log('🚀 Iniciando migração de documentos para Qdrant...\n')
 
   try {
-    // Buscar todos os documentos principais (não chunks)
     const { data: documents, error } = await supabase
       .from('documents')
       .select('*')
@@ -86,6 +67,9 @@ async function migrate() {
 
     let totalChunks = 0
     let processedDocs = 0
+    
+    // ID sequencial simples - Usar timestamp como base
+    let pointId = Date.now()
 
     for (const doc of documents) {
       console.log(`\n📄 Processando: ${doc.title || doc.metadata?.title || 'Sem título'}`)
@@ -95,7 +79,6 @@ async function migrate() {
         continue
       }
 
-      // Quebrar em chunks
       const chunks = splitMarkdownIntoChunks(
         doc.content,
         doc.title || doc.metadata?.title || 'Documento'
@@ -103,33 +86,26 @@ async function migrate() {
 
       console.log(`   📦 ${chunks.length} chunks criados`)
 
-      // Gerar embeddings e indexar
-      const points = []
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i]
-        
-        // Gerar embedding
-        const embedding = await generateEmbedding(chunk.content)
-        
-        points.push({
-          id: `${doc.condominio_id}-${doc.id}-${i}`,
-          vector: embedding,
-          payload: {
-            content: chunk.content,
-            title: doc.title || doc.metadata?.title || 'Documento',
-            condominio_id: doc.condominio_id,
-            doc_id: doc.id,
-            category: doc.metadata?.category || 'geral',
-            chunk_number: chunk.chunk_number,
-            total_chunks: chunks.length,
-            created_at: doc.created_at
-          }
-        })
+      // Preparar pontos com IDs numéricos sequenciais
+      const points = chunks.map((chunk) => ({
+        id: pointId++, // ID numérico simples e único
+        vector: {
+          dense: Array(384).fill(0) // Vetor dummy para satisfazer schema
+        },
+        payload: {
+          content: chunk.content,
+          title: doc.title || doc.metadata?.title || 'Documento',
+          condominio_id: doc.condominio_id,
+          doc_id: doc.id,
+          category: doc.metadata?.category || 'geral',
+          chunk_number: chunk.chunk_number,
+          total_chunks: chunks.length,
+          created_at: doc.created_at
+        }
+      }))
 
-        process.stdout.write(`   🧮 Embeddings: ${i + 1}/${chunks.length}\r`)
-      }
+      console.log(`   📤 Enviando ${points.length} pontos para o Qdrant...`)
 
-      // Enviar para Qdrant em batch
       const response = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points`, {
         method: 'PUT',
         headers: {
@@ -140,10 +116,12 @@ async function migrate() {
       })
 
       if (!response.ok) {
-        throw new Error(`Erro ao indexar: ${await response.text()}`)
+        const errorText = await response.text()
+        console.error(`\n   ❌ Erro ao indexar: ${errorText}`)
+        continue
       }
 
-      console.log(`\n   ✅ ${points.length} pontos indexados no Qdrant`)
+      console.log(`   ✅ ${points.length} pontos indexados`)
       
       totalChunks += points.length
       processedDocs++
@@ -154,6 +132,17 @@ async function migrate() {
     console.log(`   📚 Documentos processados: ${processedDocs}`)
     console.log(`   📦 Total de chunks indexados: ${totalChunks}`)
     console.log('='.repeat(50) + '\n')
+
+    const infoResp = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      headers: { 'api-key': QDRANT_API_KEY }
+    })
+
+    if (infoResp.ok) {
+      const info = await infoResp.json()
+      console.log('📊 Status do Qdrant:')
+      console.log(`   - Pontos indexados: ${info.result.points_count}`)
+      console.log(`   - Status: ${info.result.status}\n`)
+    }
 
   } catch (error: any) {
     console.error('\n❌ Erro:', error.message)

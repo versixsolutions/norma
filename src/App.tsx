@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ReloadPrompt from './components/ReloadPrompt'
 import { Toaster } from 'react-hot-toast'
+import { useEffect } from 'react'
 
 // --- PAGES PÚBLICAS ---
 import Login from './pages/Login'
@@ -14,7 +15,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Comunicacao from './pages/Comunicacao'
 import Suporte from './pages/Suporte'
-import Despesas from './pages/Despesas' // Transparência
+import Despesas from './pages/Despesas'
 import Profile from './pages/Profile'
 import FAQ from './pages/FAQ'
 import Ocorrencias from './pages/Ocorrencias'
@@ -39,11 +40,18 @@ import KnowledgeBaseManagement from './pages/admin/KnowledgeBaseManagement'
 
 // Protege rotas que exigem autenticação e aprovação
 function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
-  const { session, loading, profile, canManage } = useAuth()
+  const { session, loading, profile, canManage, authError, signOut } = useAuth()
   const location = useLocation()
 
+  // Efeito para forçar logout se houver erro crítico de integridade (usuário órfão)
+  useEffect(() => {
+    if (!loading && session && !profile && authError) {
+      console.warn('Sessão inválida detectada (sem perfil). Forçando logout...')
+      signOut()
+    }
+  }, [loading, session, profile, authError, signOut])
+
   if (loading) {
-    // Loading minimalista enquanto verifica a sessão
     return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm font-medium">Carregando Versix...</div>
   }
   
@@ -52,8 +60,14 @@ function PrivateRoute({ children, adminOnly = false }: { children: React.ReactNo
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  // SEGURANÇA CRÍTICA: Se tem sessão mas não tem perfil (Usuário Órfão), nega acesso.
+  // O useEffect acima já deve tratar o logout, mas isso garante que nada renderize.
+  if (!profile) {
+    return <Navigate to="/login" replace />
+  }
+
   // Se o cadastro ainda está pendente, manda pra tela de espera
-  if (profile?.role === 'pending') {
+  if (profile.role === 'pending') {
     return <Navigate to="/pending-approval" replace />
   }
 
@@ -74,7 +88,7 @@ function PendingRoute({ children }: { children: React.ReactNode }) {
   if (!session) return <Navigate to="/login" replace />
   
   // Se já foi aprovado, não tem o que fazer aqui, vai pro dashboard
-  if (profile?.role !== 'pending') {
+  if (profile?.role && profile.role !== 'pending') {
     return <Navigate to="/" replace />
   }
 
