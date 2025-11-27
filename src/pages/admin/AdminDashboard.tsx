@@ -1,163 +1,266 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useDashboardStats } from '../../hooks/useDashboardStats'
-import { formatCurrency } from '../../lib/utils'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext' // Importar contexto para verificar permissão de IA
+import { useAdmin } from '../../contexts/AdminContext'
+import { useAuth } from '../../contexts/AuthContext'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import EmptyState from '../../components/EmptyState'
+import { formatCurrency } from '../../lib/utils'
+
+// Interface para os dados da tabela de saúde
+interface CondominioHealth {
+  id: string
+  name: string
+  slug: string
+  total_users: number
+  pending_users: number
+  open_issues: number
+  active_polls: number
+}
 
 export default function AdminDashboard() {
-  const { stats } = useDashboardStats()
   const navigate = useNavigate()
-  const { isAdmin } = useAuth() // Para verificar se pode ver o botão de IA
-  const [pendingCount, setPendingCount] = useState<number | null>(null)
+  const { isAdmin } = useAuth()
+  const { setSelectedCondominioId } = useAdmin() // Para o botão "Acessar"
+
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalCondominios: 0,
+    totalUsers: 0,
+    totalPending: 0,
+    totalOpenIssues: 0
+  })
+  const [condominioHealth, setCondominioHealth] = useState<CondominioHealth[]>([])
 
   useEffect(() => {
-    async function fetchPendingUsers() {
-      const { count } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'pending')
-      
-      setPendingCount(count || 0)
+    if (isAdmin) {
+      loadGlobalStats()
     }
-    fetchPendingUsers()
-  }, [])
+  }, [isAdmin])
 
-  const cards = [
-    {
-      title: 'Ocorrências Abertas',
-      value: stats.ocorrencias.abertas,
-      label: 'Aguardando atenção',
-      icon: '🚨',
-      color: 'text-orange-600',
-      bg: 'bg-orange-50',
-      link: '/admin/ocorrencias'
-    },
-    {
-      title: 'Despesas do Mês',
-      value: formatCurrency(stats.despesas.totalMes),
-      label: stats.despesas.monthLabel,
-      icon: '💰',
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      link: '/admin/financeiro'
-    },
-    {
-      title: 'Votações Ativas',
-      value: stats.votacoes.ativas,
-      label: 'Em andamento',
-      icon: '🗳️',
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-      link: '/admin/votacoes'
-    },
-    {
-      title: 'Aprovar Cadastros',
-      value: pendingCount !== null ? pendingCount : '-', 
-      label: pendingCount === 1 ? '1 pendente' : `${pendingCount || 0} pendentes`,
-      icon: '👥',
-      color: pendingCount && pendingCount > 0 ? 'text-red-600' : 'text-blue-600', 
-      bg: pendingCount && pendingCount > 0 ? 'bg-red-50' : 'bg-blue-50',
-      link: '/admin/usuarios'
+  async function loadGlobalStats() {
+    try {
+      setLoading(true)
+
+      // 1. Buscar todos os condomínios
+      const { data: condominios, error: condError } = await supabase
+        .from('condominios')
+        .select('id, name, slug')
+        .order('created_at', { ascending: false })
+
+      if (condError) throw condError
+
+      // 2. Para cada condomínio, buscar métricas vitais
+      // Nota: Em produção com muitos dados, isso deve virar uma RPC ou View no banco.
+      // Para o MVP, faremos queries paralelas.
+      const healthData = await Promise.all(
+        (condominios || []).map(async (cond) => {
+          // Contagem de usuários
+          const { count: totalUsers } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('condominio_id', cond.id)
+
+          // Contagem de pendentes
+          const { count: pendingUsers } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('condominio_id', cond.id)
+            .eq('role', 'pending')
+
+          // Ocorrências abertas
+          const { count: openIssues } = await supabase
+            .from('ocorrencias')
+            .select('*', { count: 'exact', head: true })
+            .eq('condominio_id', cond.id)
+            .in('status', ['aberto', 'em_andamento'])
+
+          // Votações ativas
+          const now = new Date().toISOString()
+          const { count: activePolls } = await supabase
+            .from('votacoes')
+            .select('*', { count: 'exact', head: true })
+            .eq('condominio_id', cond.id)
+            .gt('end_date', now)
+
+          return {
+            id: cond.id,
+            name: cond.name,
+            slug: cond.slug,
+            total_users: totalUsers || 0,
+            pending_users: pendingUsers || 0,
+            open_issues: openIssues || 0,
+            active_polls: activePolls || 0
+          }
+        })
+      )
+
+      setCondominioHealth(healthData)
+
+      // Calcular totais globais
+      const totalUsers = healthData.reduce((acc, curr) => acc + curr.total_users, 0)
+      const totalPending = healthData.reduce((acc, curr) => acc + curr.pending_users, 0)
+      const totalOpenIssues = healthData.reduce((acc, curr) => acc + curr.open_issues, 0)
+
+      setStats({
+        totalCondominios: condominios?.length || 0,
+        totalUsers,
+        totalPending,
+        totalOpenIssues
+      })
+
+    } catch (error) {
+      console.error('Erro ao carregar dashboard global:', error)
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
+
+  // Função para "entrar" no condomínio
+  const handleAccessCondominio = (id: string) => {
+    setSelectedCondominioId(id) // Seta o contexto global
+    // Opcional: Navegar para uma página específica, ex: Usuários
+    // navigate('/admin/usuarios') 
+    // Por enquanto, apenas seta o contexto e o usuário vê que o topo mudou
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  if (loading) return <LoadingSpinner message="Compilando dados da plataforma..." />
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Visão Geral</h1>
-        <p className="text-gray-500">Resumo das atividades do condomínio.</p>
+    <div className="space-y-8 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard Global</h1>
+          <p className="text-gray-500">Visão macro da plataforma Versix Norma.</p>
+        </div>
+        <button
+          onClick={() => navigate('/admin/condominios')}
+          className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold shadow-md hover:bg-indigo-700 transition flex items-center gap-2"
+        >
+          <span>🏢</span> Gerenciar Condomínios
+        </button>
       </div>
 
-      <div className="
-        flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4
-        md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible md:pb-0 md:snap-none
-        scrollbar-hide
-      ">
-        {cards.map((card) => (
-          <div 
-            key={card.title} 
-            onClick={() => navigate(card.link)}
-            className={`
-              min-w-[260px] snap-center md:min-w-0
-              bg-white p-6 rounded-xl shadow-sm border transition-all cursor-pointer
-              ${card.title === 'Aprovar Cadastros' && (pendingCount || 0) > 0 ? 'border-red-200 ring-1 ring-red-100' : 'border-gray-200'}
-              hover:shadow-md hover:-translate-y-1
-            `}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${card.bg}`}>
-                {card.icon}
-              </div>
-              {card.title === 'Aprovar Cadastros' && (pendingCount || 0) > 0 && (
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                </span>
-              )}
+      {/* 1. KPIs Globais */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xl">🏢</div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Clientes</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{stats.totalCondominios}</p>
+          <p className="text-xs text-gray-500">Condomínios ativos</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-xl">👥</div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Alcance</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
+          <p className="text-xs text-gray-500">Usuários totais</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${stats.totalPending > 0 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+              ⏳
             </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">{card.title}</h3>
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-            <p className="text-xs text-gray-400 mt-1">{card.label}</p>
+            <span className="text-xs font-bold text-gray-400 uppercase">Fila</span>
           </div>
-        ))}
+          <p className={`text-2xl font-bold ${stats.totalPending > 0 ? 'text-red-600' : 'text-gray-900'}`}>{stats.totalPending}</p>
+          <p className="text-xs text-gray-500">Aprovações pendentes</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center text-xl">🚨</div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Suporte</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{stats.totalOpenIssues}</p>
+          <p className="text-xs text-gray-500">Ocorrências abertas</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="font-bold text-gray-900 mb-4">Atalhos Operacionais</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={() => navigate('/admin/comunicados')} 
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left text-sm font-medium text-gray-700 transition group"
-            >
-              <span className="group-hover:scale-110 inline-block transition-transform mr-2">📢</span> Criar Comunicado
-            </button>
-            
-            <button 
-              onClick={() => navigate('/admin/votacoes')} 
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left text-sm font-medium text-gray-700 transition group"
-            >
-              <span className="group-hover:scale-110 inline-block transition-transform mr-2">🗳️</span> Nova Assembleia
-            </button>
-            
-            {/* Botão de IA só aparece se tiver a rota ou permissão, 
-                mas como é um atalho, pode redirecionar para a gestão de conhecimento 
-                ou uma página de FAQ Admin se houver */}
-            {isAdmin && (
-              <button 
-                onClick={() => navigate('/admin/ia')} 
-                className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left text-sm font-medium text-gray-700 transition group"
-              >
-                <span className="group-hover:scale-110 inline-block transition-transform mr-2">🧠</span> Treinar Chatbot
-              </button>
-            )}
-            
-            <button 
-              onClick={() => navigate('/admin/financeiro')} 
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left text-sm font-medium text-gray-700 transition group"
-            >
-              <span className="group-hover:scale-110 inline-block transition-transform mr-2">💰</span> Lançar Despesa
-            </button>
-          </div>
+      {/* 2. Tabela de Saúde dos Condomínios */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="font-bold text-gray-900">Saúde dos Condomínios</h3>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+            {condominioHealth.length} clientes
+          </span>
         </div>
-
-        <div className="bg-gradient-to-br from-blue-900 to-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden flex flex-col justify-between">
-          <div className="relative z-10">
-            <h3 className="font-bold text-lg mb-2">Inteligência Artificial</h3>
-            <p className="text-blue-100 text-sm mb-4">A Norma respondeu a 45 dúvidas esta semana. Mantenha a base de conhecimento atualizada para melhorar as respostas.</p>
-            
-            {isAdmin && (
-              <button 
-                onClick={() => navigate('/admin/ia')}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2"
-              >
-                <span>🧠</span> Ver logs da IA
-              </button>
-            )}
-          </div>
-          <div className="absolute -right-4 -bottom-8 text-9xl opacity-10 pointer-events-none">🤖</div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
+                <th className="px-5 py-3">Condomínio</th>
+                <th className="px-5 py-3 text-center">Usuários</th>
+                <th className="px-5 py-3 text-center">Pendentes</th>
+                <th className="px-5 py-3 text-center">Ocorrências</th>
+                <th className="px-5 py-3 text-center">Assembleias</th>
+                <th className="px-5 py-3 text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {condominioHealth.map((cond) => (
+                <tr key={cond.id} className="hover:bg-gray-50 transition">
+                  <td className="px-5 py-3">
+                    <div className="font-bold text-gray-900 text-sm">{cond.name}</div>
+                    <div className="text-xs text-gray-400 font-mono">@{cond.slug}</div>
+                  </td>
+                  <td className="px-5 py-3 text-center text-sm text-gray-600">
+                    {cond.total_users}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    {cond.pending_users > 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-50 text-red-600 border border-red-100">
+                        {cond.pending_users}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    {cond.open_issues > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-orange-600">
+                        {cond.open_issues} 🚨
+                      </span>
+                    ) : (
+                      <span className="text-green-500 text-xs font-bold">OK</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    {cond.active_polls > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                        {cond.active_polls} Ativas
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">Inativo</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      onClick={() => handleAccessCondominio(cond.id)}
+                      className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded text-xs font-bold transition border border-transparent hover:border-indigo-100"
+                    >
+                      Acessar &rarr;
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+        
+        {condominioHealth.length === 0 && (
+          <div className="p-8 text-center text-gray-500">
+            Nenhum condomínio encontrado.
+          </div>
+        )}
       </div>
     </div>
   )
