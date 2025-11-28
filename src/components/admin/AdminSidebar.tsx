@@ -1,9 +1,10 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { versixTheme } from '../../config/theme-versix'
 
 export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { signOut, isAdmin, isSindico } = useAuth() 
   
   const isActive = (path: string) => location.pathname === path
@@ -19,7 +20,6 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
     { path: '/admin/votacoes', label: 'Assembleia', icon: '🗳️', show: true },
     { path: '/admin/financeiro', label: 'Financeiro', icon: '💰', show: true },
     
-    // Novo Item de Marketplace
     { path: '/admin/marketplace', label: 'Gestão Marketplace', icon: '🛍️', show: isAdmin },
     
     { path: '/admin/ia', label: 'Base de Conhecimento', icon: '🧠', show: isAdmin || isSindico },
@@ -67,12 +67,23 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-gray-100 space-y-2">
+        {/* Botão de Voltar para o App (Visível apenas para Síndicos/Sub/Conselho) */}
+        {!isAdmin && (
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-3 text-gray-600 hover:bg-gray-50 w-full px-4 py-2 rounded-lg transition text-sm font-medium group"
+          >
+            <span className="text-lg group-hover:scale-110 transition-transform">🏠</span>
+            Voltar para o App
+          </button>
+        )}
+
         <button 
           onClick={() => signOut()}
-          className="flex items-center gap-2 text-red-600 hover:bg-red-50 w-full px-4 py-2 rounded-lg transition text-sm font-medium"
+          className="flex items-center gap-3 text-red-600 hover:bg-red-50 w-full px-4 py-2 rounded-lg transition text-sm font-medium group"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+          <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
           Sair do Sistema
         </button>
       </div>
