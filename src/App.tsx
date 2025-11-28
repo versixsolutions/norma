@@ -36,7 +36,8 @@ import VotacoesManagement from './pages/admin/VotacoesManagement'
 import FinanceiroManagement from './pages/admin/FinanceiroManagement'
 import KnowledgeBaseManagement from './pages/admin/KnowledgeBaseManagement'
 import MarketplaceManagement from './pages/admin/MarketplaceManagement'
-import FAQImport from './pages/admin/FAQImport' // Nova Importação
+import FAQImport from './pages/admin/FAQImport'
+import FinanceiroImport from './pages/admin/FinanceiroImport' // Nova Importação
 
 // --- COMPONENTES DE PROTEÇÃO DE ROTA ---
 
@@ -134,9 +135,10 @@ export default function App() {
               <Route path="comunicados" element={<ComunicadosManagement />} />
               <Route path="votacoes" element={<VotacoesManagement />} />
               <Route path="financeiro" element={<FinanceiroManagement />} />
+              <Route path="financeiro/import" element={<FinanceiroImport />} /> {/* Nova Rota */}
               <Route path="ia" element={<KnowledgeBaseManagement />} />
               <Route path="marketplace" element={<MarketplaceManagement />} /> 
-              <Route path="faq-import" element={<FAQImport />} /> {/* Rota de Importação */}
+              <Route path="faq-import" element={<FAQImport />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
