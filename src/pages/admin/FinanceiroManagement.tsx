@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { useAdmin } from '../../contexts/AdminContext' // Importar
+import { useAdmin } from '../../contexts/AdminContext'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import EmptyState from '../../components/EmptyState'
 import Modal from '../../components/ui/Modal'
+import { useNavigate } from 'react-router-dom'
 
 interface Despesa {
   id: string
@@ -23,7 +24,8 @@ const CATEGORIES = [
 
 export default function FinanceiroManagement() {
   const { user } = useAuth()
-  const { selectedCondominioId } = useAdmin() // Contexto Global
+  const { selectedCondominioId } = useAdmin()
+  const navigate = useNavigate() // Hook para navegação
 
   const [despesas, setDespesas] = useState<Despesa[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +52,7 @@ export default function FinanceiroManagement() {
       const { data, error } = await supabase
         .from('despesas')
         .select('*')
-        .eq('condominio_id', selectedCondominioId) // Filtro Seguro
+        .eq('condominio_id', selectedCondominioId)
         .order('due_date', { ascending: false })
 
       if (error) throw error
@@ -103,7 +105,7 @@ export default function FinanceiroManagement() {
         due_date: formData.dueDate,
         paid_at: formData.isPaid ? new Date().toISOString() : null,
         author_id: user.id,
-        condominio_id: selectedCondominioId // INSERÇÃO SEGURA
+        condominio_id: selectedCondominioId
       })
 
       if (error) throw error
@@ -127,18 +129,34 @@ export default function FinanceiroManagement() {
           <h1 className="text-2xl font-bold text-gray-900">Gestão Financeira</h1>
           <p className="text-gray-500 text-sm">Lançamento de despesas para transparência.</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-green-700 transition flex items-center gap-2"
-        >
-          <span>+</span> Nova Despesa
-        </button>
+        
+        {/* BOTÕES DE AÇÃO */}
+        <div className="flex items-center gap-3">
+            <button
+            onClick={() => navigate('/admin/financeiro/import')}
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition flex items-center gap-2 shadow-sm"
+            >
+            <span>📥</span> <span className="hidden sm:inline">Importar PDF</span>
+            </button>
+            
+            <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-green-700 transition flex items-center gap-2"
+            >
+            <span>+</span> Nova Despesa
+            </button>
+        </div>
       </div>
 
       {loading ? (
         <LoadingSpinner />
       ) : despesas.length === 0 ? (
-        <EmptyState icon="💰" title="Sem lançamentos" description="Comece a registrar as despesas deste condomínio." />
+        <EmptyState 
+            icon="💰" 
+            title="Sem lançamentos" 
+            description="Comece a registrar as despesas deste condomínio." 
+            action={{ label: 'Importar Demonstrativo (PDF)', onClick: () => navigate('/admin/financeiro/import') }}
+        />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
