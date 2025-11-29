@@ -59,11 +59,17 @@ a) Variáveis de Ambiente
    ✅ SUPABASE_ANON_KEY     (Sua Anon Key)
 
 b) Deploy da function
-   Localmente:
+   Opção 1: Via CLI (se estiver logado):
    
    supabase functions deploy ask-ai
    
-   Isso enviará a versão corrigida com rate limiting.
+   Opção 2: Manual via Dashboard
+   1. Abra https://app.supabase.com/project/gjsnrrfuahfckvjlzwxw/functions
+   2. Clique em "ask-ai"
+   3. Cole o conteúdo de: supabase/functions/ask-ai/index.ts
+   4. Clique em "Deploy"
+   
+   Depois configure as variáveis de ambiente (veja próximo passo)
 
 c) Verificar config.toml
    Arquivo: supabase/config.toml
@@ -163,6 +169,13 @@ Logs esperados:
 ❌ Build falha com "logger.ts"
 → Execute: npm install
 → Depois: npm run build
+
+❌ Erro: "Invalid access token format" ao fazer deploy
+→ Login novamente: npx supabase login
+→ Ou use o deploy manual via Dashboard (veja opção 2 acima)
+
+❌ Erro ao conectar função com banco de dados
+→ Verifique que SUPABASE_URL e SUPABASE_ANON_KEY estão nas Secrets
 
 ================================
 9. MONITORAMENTO EM PRODUÇÃO
