@@ -7,16 +7,30 @@ export default function ReloadPrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      console.log('SW Registered: ' + r)
+      console.log('✅ Service Worker registrado:', r)
     },
     onRegisterError(error) {
-      console.log('SW registration error', error)
+      console.error('❌ Erro ao registrar Service Worker:', error)
     },
   })
 
   const close = () => {
     setOfflineReady(false)
     setNeedRefresh(false)
+  }
+
+  const handleUpdate = async () => {
+    try {
+      // Atualizar o Service Worker
+      await updateServiceWorker(true)
+      // Aguardar um pouco e recarregar a página
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
+    } catch (error) {
+      console.error('Erro ao atualizar:', error)
+      window.location.reload()
+    }
   }
 
   return (
@@ -41,7 +55,7 @@ export default function ReloadPrompt() {
             {needRefresh && (
               <button
                 className="flex-1 bg-primary text-white px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 transition"
-                onClick={() => updateServiceWorker(true)}
+                onClick={handleUpdate}
               >
                 Atualizar
               </button>

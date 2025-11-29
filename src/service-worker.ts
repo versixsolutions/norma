@@ -6,8 +6,14 @@ declare let self: ServiceWorkerGlobalScope
 
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
-self.skipWaiting()
-clientsClaim()
+self.clientsClaim()
+
+// Handler para mensagens do cliente (para atualização de SW)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
 
 self.addEventListener('push', (event) => {
   if (!event.data) return

@@ -11,6 +11,12 @@ export default defineConfig({
       filename: 'service-worker.ts',
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        navigationPreload: true,
+      },
       manifest: {
         name: 'Versix Norma',
         short_name: 'Versix Norma',
