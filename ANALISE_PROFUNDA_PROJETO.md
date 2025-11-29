@@ -167,12 +167,21 @@ versix-norma/
    - Feedback visual (sucesso/erro/indisponível)
    - Data-testid para testes
 
-5. **`src/pages/Financeiro.tsx`** (Renomeado de Despesas)
+5. **`src/pages/Profile.tsx`** (Atualizado - 29/nov/2025) ⭐ **NOVO RECURSO**
+   - **Histórico de Votos integrado ao perfil do usuário**
+   - Query com joins: `assembleias_votos` → `pautas` → `assembleias`
+   - Exibe até 25 votos mais recentes do usuário
+   - Descrição enriquecida: pauta + voto + assembleia relacionada
+   - Unificado com histórico de ocorrências e chamados
+   - `data-testid="vote-history-item"` para automação
+   - RLS garante que usuário vê apenas seus próprios votos
+
+6. **`src/pages/Financeiro.tsx`** (Renomeado de Despesas)
    - Ajustado título para "Prestação de Contas"
    - Mantém funcionalidade completa de transparência financeira
    - Export CSV renomeado
 
-6. **`src/pages/admin/AdminAssembleias.tsx`** (300 linhas) ⭐ **COMPLEXO**
+7. **`src/pages/admin/AdminAssembleias.tsx`** (300 linhas) ⭐ **COMPLEXO**
    - CRUD completo de assembleias
    - Criação com upload de PDF (edital)
    - Edição com upload de ata
@@ -183,7 +192,7 @@ versix-norma/
    - Layout 2 colunas: lista + detalhes
    - Data-testid completo para testes
 
-7. **`src/hooks/useAssembleias.ts`** (340 linhas) ⭐ **HOOK PRINCIPAL**
+8. **`src/hooks/useAssembleias.ts`** (340 linhas) ⭐ **HOOK PRINCIPAL**
    - Hook unificado para todas as operações
    - **User features:**
      - `registrarPresenca(id)` - Check-in via QR
@@ -205,7 +214,7 @@ versix-norma/
    - Validação de duplicatas (presença e votos)
    - Toast notifications em todas as ações
 
-8. **`src/lib/pdfExportAssembleias.ts`** (220 linhas)
+9. **`src/lib/pdfExportAssembleias.ts`** (220 linhas)
    - Exportação PDF profissional com jsPDF
    - Layout estruturado: cabeçalho + pautas + resultados
    - Barras de progresso visuais para percentuais
@@ -214,7 +223,7 @@ versix-norma/
    - Rodapé com timestamp
 
 ##### Backend/Database (2 arquivos)
-9. **`scripts/create-assembleias-tables.sql`** (200 linhas)
+10. **`scripts/create-assembleias-tables.sql`** (200 linhas)
    - 4 tabelas criadas:
      - `assembleias` - Dados principais
      - `assembleias_presencas` - Registro de check-in
@@ -225,14 +234,14 @@ versix-norma/
    - Índices para performance
    - Campos: status workflow, edital/ata PDFs, link_presenca
 
-10. **`scripts/seed-assembleia.ts`** (60 linhas)
+11. **`scripts/seed-assembleia.ts`** (60 linhas)
     - Script para criar assembleia de teste
     - 2 pautas pré-configuradas (uma em votação)
     - Resolve condominio_id automaticamente
     - Comando: `npm run seed:assembleia`
 
 ##### Types (1 arquivo)
-11. **`src/types/index.ts`** (Adicionadas 6 interfaces)
+12. **`src/types/index.ts`** (Adicionadas 6 interfaces)
     - `Assembleia` - Estado completo da assembleia
     - `AssembleiaPresenca` - Check-in
     - `AssembleiaPauta` - Agenda de votação
@@ -241,7 +250,7 @@ versix-norma/
     - Documentação JSDoc completa
 
 ##### Testes (1 arquivo)
-12. **`cypress/e2e/assembleia_presenca.cy.ts`** (40 linhas)
+13. **`cypress/e2e/assembleia_presenca.cy.ts`** (40 linhas)
     - 3 cenários de teste:
       - Acesso com ID inválido
       - Navegação de retorno
@@ -249,7 +258,7 @@ versix-norma/
     - Usa data-testid para seletores robustos
 
 ##### Config/Routes (3 arquivos)
-13. **`src/App.tsx`** (Modificado)
+14. **`src/App.tsx`** (Modificado)
     - Lazy loading para módulos pesados:
       - `Transparencia`, `Financeiro`, `Assembleias`
       - `AssembleiaDetalhes`, `AssembleiaPresenca`
@@ -258,11 +267,11 @@ versix-norma/
     - Rotas aninhadas para transparência
     - Redirect `/despesas` → `/transparencia/financeiro`
 
-14. **`src/components/admin/AdminSidebar.tsx`** (Modificado)
+15. **`src/components/admin/AdminSidebar.tsx`** (Modificado)
     - Item "Assembleias" adicionado
     - Legacy "Votações" ocultado (show: false)
 
-15. **`package.json`** (Modificado)
+16. **`package.json`** (Modificado)
     - Nova dependência: `jspdf@3.0.4`
     - Nova dependência: `qrcode.react@4.2.0`
     - Novo script: `seed:assembleia`
@@ -312,6 +321,23 @@ versix-norma/
    - Indicador de vencedor
    - Rodapé com timestamp
 4. Download automático do PDF
+```
+
+#### Fluxo 5: Histórico de Votos no Perfil (Morador) ⭐ **NOVO - 29/nov/2025**
+```
+1. Morador acessa "Meu Perfil" no menu
+2. Seção "Histórico de Atividades" unifica:
+   - Votos em assembleias (assembleias_votos)
+   - Ocorrências criadas
+   - Chamados de suporte
+3. Cada voto exibe:
+   - Ícone e badge "Voto Registrado / Computado"
+   - Descrição: "Você votou '[opção]' na pauta '[título]' da assembleia '[nome]'"
+   - Data/hora formatada com formatDateTime()
+4. Query otimizada com joins: votos → pautas → assembleias
+5. Limitado a 25 registros mais recentes
+6. RLS garante privacidade (user vê apenas seus próprios votos)
+7. data-testid="vote-history-item" para automação
 ```
 
 ### Decisões de Design e Padrões
