@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { formatDateTime } from '../lib/utils' // Usaremos esta função agora
+import { formatDateTime } from '../lib/utils'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -31,8 +31,26 @@ export default function Profile() {
         setLoading(true)
         const userId = profile.id
 
-        // 1. Votos
-        const { data: votos } = await supabase.from('votos').select(`id, vote, voted_at, votacao:votacao_id (title)`).eq('user_id', userId).order('voted_at', { ascending: false }).limit(10)
+        // 1. Votos em Assembleias (novo modelo)
+        const { data: votos } = await supabase
+          .from('assembleias_votos')
+          .select(`
+            id,
+            voto,
+            votado_em,
+            pauta:pauta_id (
+              id,
+              titulo,
+              assembleia:assembleia_id (
+                id,
+                titulo,
+                data_hora
+              )
+            )
+          `)
+          .eq('user_id', userId)
+          .order('votado_em', { ascending: false })
+          .limit(25)
         // 2. Ocorrências
         const { data: ocorrencias } = await supabase.from('ocorrencias').select('*').eq('author_id', userId).order('created_at', { ascending: false }).limit(10)
         // 3. Chamados
@@ -43,7 +61,18 @@ export default function Profile() {
 
         const myActivities: Activity[] = []
 
-        votos?.forEach((v: any) => myActivities.push({ id: v.id, type: 'voto', title: 'Voto Registrado', description: `Você participou da votação: "${v.votacao?.title}"`, date: v.voted_at, status: 'Computado' }))
+        votos?.forEach((v: any) => {
+          const pautaTitulo = v.pauta?.titulo || 'Pauta'
+          const assembleiaTitulo = v.pauta?.assembleia?.titulo ? ` da assembleia "${v.pauta.assembleia.titulo}"` : ''
+          myActivities.push({
+            id: v.id,
+            type: 'voto',
+            title: 'Voto Registrado',
+            description: `Você votou "${v.voto}" na pauta "${pautaTitulo}"${assembleiaTitulo}`,
+            date: v.votado_em,
+            status: 'Computado'
+          })
+        })
         ocorrencias?.forEach((o: any) => myActivities.push({ id: o.id, type: 'ocorrencia', title: `Ocorrência: ${o.title}`, description: o.description, date: o.created_at, status: o.status }))
         chamados?.forEach((c: any) => myActivities.push({ id: c.id, type: 'chamado', title: `Chamado de Suporte`, description: c.subject + (c.response ? ' (Respondido)' : ''), date: c.created_at, status: c.status }))
 
@@ -102,7 +131,7 @@ export default function Profile() {
       <div className="space-y-4">
         {activities.length > 0 ? (
           activities.map((item) => (
-            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex gap-4">
+            <div key={item.id} data-testid={item.type === 'voto' ? 'vote-history-item' : undefined} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex gap-4">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${item.type === 'voto' ? 'bg-purple-100 text-purple-600' : item.type === 'chamado' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
                 {item.type === 'voto' ? '🗳️' : item.type === 'chamado' ? '🎫' : '🚨'}
               </div>
