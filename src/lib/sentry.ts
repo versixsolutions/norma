@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/react'
-import { BrowserTracing } from '@sentry/tracing'
 
 /**
  * Initialize Sentry for error tracking and performance monitoring
@@ -32,90 +31,82 @@ export function initializeSentry(): void {
     return
   }
 
-  Sentry.init({
-    dsn: sentryDsn,
-    environment,
-    
-    // Performance Monitoring
-    integrations: [
-      new BrowserTracing({
-        // Set sampling rate for performance monitoring
-        tracingOrigins: [/^\//],
-        // Capture exceptions from routerChange as well
-        shouldCreateSpanForRequest: (url) => {
-          return !url.includes('/health')
-        },
-      }),
-    ],
+  try {
+    Sentry.init({
+      dsn: sentryDsn,
+      environment,
+      
+      // Set sample rate for performance monitoring (10% in production)
+      tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
 
-    // Set sample rate for performance monitoring (1% = 0.01)
-    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+      // Capture session replays for 10% of errors in production
+      replaysOnErrorSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+      replaysSessionSampleRate: import.meta.env.PROD ? 0.05 : 0.1,
 
-    // Capture session replays for 10% of errors in production
-    replaysOnErrorSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-    replaysSessionSampleRate: import.meta.env.PROD ? 0.05 : 0.1,
+      // Release tracking (optional - set via Vercel env or manually)
+      release: import.meta.env.VITE_APP_VERSION || 'unknown',
 
-    // Release tracking (optional - set via Vercel env or manually)
-    release: import.meta.env.VITE_APP_VERSION || 'unknown',
+      // Do not capture these events
+      denyUrls: [
+        // Browser extensions
+        /extensions\//i,
+        /^chrome:\/\//i,
+        /^moz-extension:\/\//i,
+        // Third-party scripts
+        /ga\.js/i,
+        /google-analytics/i,
+      ],
 
-    // Do not capture these events
-    denyUrls: [
-      // Browser extensions
-      /extensions\//i,
-      /^chrome:\/\//i,
-      /^moz-extension:\/\//i,
-      // Third-party scripts
-      /ga\.js/i,
-      /google-analytics/i,
-    ],
+      // Ignore certain errors (e.g., network timeouts, user actions)
+      ignoreErrors: [
+        // Random plugins/extensions
+        'top\.GLOBALS',
+        'chrome-extension://',
+        // Facebook errors
+        'fb_xd_fragment',
+        // Network errors (often not actionable)
+        'NetworkError',
+        'TimeoutError',
+        'Failed to fetch',
+        'Load failed',
+        // Ignore errors from PWA offline
+        'navigator.onLine is false',
+        // Ignore ResizeObserver errors (non-critical)
+        'ResizeObserver loop limit exceeded',
+      ],
 
-    // Ignore certain errors (e.g., network timeouts, user actions)
-    ignoreErrors: [
-      // Random plugins/extensions
-      'top\.GLOBALS',
-      'chrome-extension://',
-      // Facebook errors
-      'fb_xd_fragment',
-      // Network errors (often not actionable)
-      'NetworkError',
-      'TimeoutError',
-      'Failed to fetch',
-      'Load failed',
-      // Ignore errors from PWA offline
-      'navigator.onLine is false',
-      // Ignore ResizeObserver errors (non-critical)
-      'ResizeObserver loop limit exceeded',
-    ],
-
-    // Before sending to Sentry
-    beforeSend(event, hint) {
-      // Filter out errors from development tools
-      if (import.meta.env.DEV && hint.originalException instanceof Error) {
-        if (hint.originalException.message?.includes('ResizeObserver')) {
-          return null
+      // Before sending to Sentry
+      beforeSend(event, hint) {
+        // Filter out errors from development tools
+        if (import.meta.env.DEV && hint.originalException instanceof Error) {
+          if (hint.originalException.message?.includes('ResizeObserver')) {
+            return null
+          }
         }
+
+        return event
+      },
+    })
+
+    // Set user context if authenticated
+    const user = localStorage.getItem('user')
+    if (user) {
+      try {
+        const userData = JSON.parse(user)
+        Sentry.setUser({
+          id: userData.id,
+          email: userData.email,
+          username: userData.email?.split('@')[0],
+        })
+      } catch (e) {
+        // Ignore parse errors
       }
-
-      return event
-    },
-  })
-
-  // Set user context if authenticated
-  const user = localStorage.getItem('user')
-  if (user) {
-    try {
-      const userData = JSON.parse(user)
-      Sentry.setUser({
-        id: userData.id,
-        email: userData.email,
-        username: userData.email?.split('@')[0],
-      })
-    } catch (e) {
-      // Ignore parse errors
     }
-  }
 
-  console.log(`✅ Sentry initialized (${environment})`)
+    console.log(`✅ Sentry initialized (${environment})`)
+  } catch (err) {
+    console.warn('⚠️ Sentry initialization failed:', err)
+  }
 }
 
 /**

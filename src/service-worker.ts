@@ -17,16 +17,6 @@ try {
   console.warn('Erro ao configurar precache:', err)
 }
 
-// Claim clients with error handling
-try {
-  // Claim all clients to ensure service worker takes control immediately
-  if (self.clients && typeof self.clients.claim === 'function') {
-    self.clients.claim()
-  }
-} catch (err) {
-  console.warn('Erro ao clamar clients:', err)
-}
-
 // Handler para mensagens do cliente (para atualização de SW)
 self.addEventListener('message', (event) => {
   try {
