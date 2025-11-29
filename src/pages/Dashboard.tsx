@@ -34,7 +34,8 @@ export default function Dashboard() {
   
   const [updates, setUpdates] = useState<DashboardUpdate[]>([])
   const [loadingUpdates, setLoadingUpdates] = useState(true)
-  const [banner, setBanner] = useState<BannerAd | null>(null)
+  const [banners, setBanners] = useState<BannerAd[]>([])
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
   
   const [isChatOpen, setIsChatOpen] = useState(false)
 
@@ -59,12 +60,11 @@ export default function Dashboard() {
         .from('marketplace_ads')
         .select('*')
         .eq('active', true)
-        .limit(1)
-        .order('created_at', { ascending: false }) 
+        .order('created_at', { ascending: false })
       
       if (data && data.length > 0) {
-        setBanner(data[0])
-        // Tenta incrementar view de forma segura (fire and forget)
+        setBanners(data)
+        // Tenta incrementar view do primeiro banner de forma segura (fire and forget)
         try {
            await supabase.rpc('increment_ad_view', { ad_id: data[0].id })
         } catch (err) {
@@ -76,7 +76,27 @@ export default function Dashboard() {
     }
   }
 
-  const handleBannerClick = async () => {
+  // Auto-rotação dos banners a cada 5 segundos
+  useEffect(() => {
+    if (banners.length <= 1) return
+
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prev) => {
+        const nextIndex = (prev + 1) % banners.length
+        // Registra view do próximo banner
+        try {
+          supabase.rpc('increment_ad_view', { ad_id: banners[nextIndex].id })
+        } catch (err) {
+          console.warn('Falha ao registrar view do banner:', err)
+        }
+        return nextIndex
+      })
+    }, 5000) // 5 segundos
+
+    return () => clearInterval(interval)
+  }, [banners])
+
+  const handleBannerClick = async (banner: BannerAd) => {
     if (banner) {
       // 1. Tenta registrar o clique (fire and forget)
       try {
@@ -90,6 +110,16 @@ export default function Dashboard() {
       if (banner.link_url) {
         window.open(banner.link_url, '_blank')
       }
+    }
+  }
+
+  const goToBanner = (index: number) => {
+    setCurrentBannerIndex(index)
+    // Registra view
+    try {
+      supabase.rpc('increment_ad_view', { ad_id: banners[index].id })
+    } catch (err) {
+      console.warn('Falha ao registrar view:', err)
     }
   }
 
@@ -168,20 +198,72 @@ export default function Dashboard() {
         <DashboardCard icon="📚" label="Documentos" kpi="Biblioteca" onClick={() => navigate('/biblioteca')} />
       </div>
 
-      {/* BANNER PUBLICITÁRIO */}
-      {banner && (
-        <div 
-          onClick={handleBannerClick}
-          className="mb-8 rounded-2xl overflow-hidden shadow-lg cursor-pointer transform transition-all hover:scale-[1.01] active:scale-[0.99] relative group"
-        >
-          <div className="absolute top-2 right-2 bg-black/30 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm uppercase font-bold tracking-widest opacity-70">
-            Publicidade
+      {/* BANNER PUBLICITÁRIO COM CARROSSEL */}
+      {banners.length > 0 && (
+        <div className="mb-8 relative group">
+          {/* Carrossel Container */}
+          <div className="rounded-2xl overflow-hidden shadow-lg relative">
+            {/* Badge Publicidade */}
+            <div className="absolute top-2 right-2 bg-black/30 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm uppercase font-bold tracking-widest opacity-70 z-10">
+              Publicidade
+            </div>
+
+            {/* Banner Atual */}
+            <div
+              onClick={() => handleBannerClick(banners[currentBannerIndex])}
+              className="cursor-pointer transform transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              <img
+                src={banners[currentBannerIndex].image_url}
+                alt={banners[currentBannerIndex].title}
+                className="w-full h-auto object-cover max-h-40 md:max-h-52 transition-opacity duration-500"
+              />
+            </div>
+
+            {/* Setas de Navegação (aparecem no hover se houver múltiplos banners) */}
+            {banners.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToBanner((currentBannerIndex - 1 + banners.length) % banners.length)
+                  }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  aria-label="Banner anterior"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToBanner((currentBannerIndex + 1) % banners.length)
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  aria-label="Próximo banner"
+                >
+                  →
+                </button>
+              </>
+            )}
           </div>
-          <img 
-            src={banner.image_url} 
-            alt={banner.title} 
-            className="w-full h-auto object-cover max-h-40 md:max-h-52" 
-          />
+
+          {/* Indicadores de Posição (dots) */}
+          {banners.length > 1 && (
+            <div className="flex justify-center gap-1.5 mt-3">
+              {banners.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToBanner(index)}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === currentBannerIndex
+                      ? 'w-6 bg-primary'
+                      : 'w-1.5 bg-gray-300 hover:bg-gray-400'
+                  }`}
+                  aria-label={`Ir para banner ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
