@@ -193,7 +193,7 @@ export default function AssembleiaDetalhes() {
 
         {/* Ações Rápidas */}
         <div className="flex gap-3">
-          {assembleia.status === 'encerrada' && (
+          {assembleia.status === 'encerrada' && canManage && (
             <button
               onClick={handleExportarPDF}
               disabled={exportandoPDF}
