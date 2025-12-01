@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDateTime } from '../lib/utils'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
+import { useComunicadosQuery, useMarkComunicadoAsRead } from '../hooks/queries/comunicados'
 
 interface Comunicado {
   id: string
@@ -76,30 +76,15 @@ function ComunicadoCard({ comunicado, onMarkRead }: { comunicado: Comunicado, on
 }
 
 export default function Comunicados() {
-  const [comunicados, setComunicados] = useState<Comunicado[]>([])
-  const [loading, setLoading] = useState(true)
   const [selectedType, setSelectedType] = useState<string | null>(null)
+  const { canManage } = useAuth()
   
-  // Pegamos o 'canManage' (Admin/Sindico) do contexto
-  const { user, canManage } = useAuth()
+  // React Query hooks
+  const { data: comunicados = [], isLoading: loading } = useComunicadosQuery(selectedType || undefined)
+  const markAsReadMutation = useMarkComunicadoAsRead()
 
-  useEffect(() => { loadComunicados() }, [user])
-
-  async function loadComunicados() {
-    try {
-      const { data, error } = await supabase.from('comunicados').select(`id, title, content, type, priority, published_at, created_at, author:author_id (full_name, role)`).order('priority', { ascending: false }).order('published_at', { ascending: false })
-      if (error) throw error
-      const { data: reads } = await supabase.from('comunicado_reads').select('comunicado_id').eq('user_id', user?.id || '')
-      const readIds = new Set(reads?.map(r => r.comunicado_id) || [])
-      const formatted = data?.map(c => ({ ...c, author: Array.isArray(c.author) ? c.author[0] : c.author, is_read: readIds.has(c.id), published_at: c.published_at || c.created_at })) || []
-      setComunicados(formatted)
-    } catch (error) { console.error(error) } finally { setLoading(false) }
-  }
-
-  async function markAsRead(id: string) {
-    if (!user) return
-    await supabase.from('comunicado_reads').insert({ comunicado_id: id, user_id: user.id })
-    setComunicados(prev => prev.map(c => c.id === id ? { ...c, is_read: true } : c))
+  function markAsRead(id: string) {
+    markAsReadMutation.mutate(id)
   }
 
   const filtered = selectedType ? comunicados.filter(c => c.type === selectedType) : comunicados

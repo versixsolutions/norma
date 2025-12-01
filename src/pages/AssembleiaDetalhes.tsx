@@ -8,6 +8,8 @@ import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 import toast from 'react-hot-toast'
 import type { Assembleia, AssembleiaPresenca, AssembleiaPauta, ResultadoVotacao } from '../types'
+import { PautaVotacao } from '../components/assembleias/PautaVotacao'
+import { ResultadoCard } from '../components/assembleias/ResultadoCard'
 
 export default function AssembleiaDetalhes() {
   const { id } = useParams<{ id: string }>()
@@ -404,101 +406,5 @@ export default function AssembleiaDetalhes() {
         </div>
       )}
     </PageLayout>
-  )
-}
-
-interface PautaVotacaoProps {
-  pauta: AssembleiaPauta
-  onVotar: (pautaId: string, opcao: string) => void
-  userId: string
-}
-
-function PautaVotacao({ pauta, onVotar, userId }: PautaVotacaoProps) {
-  const [jaVotou, setJaVotou] = useState(false)
-  const [votando, setVotando] = useState(false)
-
-  useEffect(() => {
-    checkIfVoted()
-  }, [pauta.id, userId])
-
-  async function checkIfVoted() {
-    if (!userId) return
-
-    const { data } = await supabase
-      .from('assembleias_votos')
-      .select('id')
-      .eq('pauta_id', pauta.id)
-      .eq('user_id', userId)
-      .single()
-
-    setJaVotou(!!data)
-  }
-
-  async function handleVoto(opcao: string) {
-    setVotando(true)
-    await onVotar(pauta.id, opcao)
-    setJaVotou(true)
-    setVotando(false)
-  }
-
-  return (
-    <div className="bg-white rounded-xl p-5 border border-purple-200">
-      <h4 className="font-bold text-gray-900 mb-2">{pauta.titulo}</h4>
-      <p className="text-sm text-gray-600 mb-4">{pauta.descricao}</p>
-
-      {jaVotou ? (
-        <div className="bg-green-100 text-green-800 p-3 rounded-lg text-center font-bold">
-          ✅ Voto registrado com sucesso
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {pauta.opcoes.map((opcao) => (
-            <button
-              key={opcao}
-              onClick={() => handleVoto(opcao)}
-              disabled={votando}
-              className="py-3 px-4 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg font-bold transition disabled:opacity-50"
-            >
-              {opcao}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-interface ResultadoCardProps {
-  resultado: ResultadoVotacao
-}
-
-function ResultadoCard({ resultado }: ResultadoCardProps) {
-  return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-      <h4 className="font-bold text-gray-900 mb-3">{resultado.titulo}</h4>
-      <div className="space-y-2">
-        {resultado.resultados.map((r) => (
-          <div key={r.opcao}>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="font-medium">{r.opcao}</span>
-              <span className="font-bold text-purple-600">
-                {r.votos} voto{r.votos !== 1 ? 's' : ''} ({r.percentual.toFixed(1)}%)
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-purple-600 h-2 rounded-full transition-all"
-                style={{ width: `${r.percentual}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      {resultado.vencedor && (
-        <div className="mt-3 bg-purple-100 text-purple-900 p-2 rounded text-center font-bold text-sm">
-          🏆 Resultado: {resultado.vencedor}
-        </div>
-      )}
-    </div>
   )
 }

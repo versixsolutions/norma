@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { useChamados } from '../hooks/useChamados'
+import { useCreateChamado } from '../hooks/queries/chamados'
 import PageLayout from '../components/PageLayout'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -16,8 +16,7 @@ const ASSUNTOS = [
 
 export default function NovoChamado() {
   const navigate = useNavigate()
-  const { criarChamado } = useChamados()
-  const [loading, setLoading] = useState(false)
+  const { mutate: criarChamado, isPending } = useCreateChamado()
   
   const [formData, setFormData] = useState({
     subject: 'Administrativo',
@@ -31,28 +30,22 @@ export default function NovoChamado() {
       return
     }
 
-    setLoading(true)
-
-    try {
-      const success = await criarChamado({
+    criarChamado(
+      {
         subject: formData.subject,
-        description: formData.description
-      })
-
-      if (success) {
-        toast.success('✅ Mensagem enviada! O síndico logo responderá')
-        setFormData({ subject: 'Administrativo', description: '' })
-        setTimeout(() => navigate('/perfil'), 1500)
+        description: formData.description,
+      },
+      {
+        onSuccess: () => {
+          toast.success('✅ Mensagem enviada! O síndico logo responderá')
+          setFormData({ subject: 'Administrativo', description: '' })
+          setTimeout(() => navigate('/perfil'), 1500)
+        },
       }
-    } catch (error: any) {
-      console.error('Erro ao enviar:', error)
-      toast.error('❌ Erro ao enviar: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
+    )
   }
 
-  if (loading) return <LoadingSpinner message="Enviando mensagem..." />
+  if (isPending) return <LoadingSpinner message="Enviando mensagem..." />
 
   return (
     <PageLayout 

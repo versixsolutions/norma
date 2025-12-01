@@ -149,5 +149,55 @@ export interface ResultadoVotacao {
   vencedor: string | null
 }
 
+/**
+ * Interface para Comunicado (anúncio/notificação do condomínio)
+ * @interface Comunicado
+ */
+export interface Comunicado {
+  id: string
+  title: string
+  content: string
+  type: string
+  priority: string
+  published_at: string
+  created_at: string
+  author_id: string
+}
+
+/**
+ * Interface para Anexo de Comunicado
+ * @interface ComunicadoAttachment
+ */
+export interface ComunicadoAttachment {
+  id: string
+  comunicado_id: string
+  file_name: string
+  file_url: string
+  file_type: string
+  file_size: number
+  created_at: string
+}
+
+/**
+ * Interface para Leitura de Comunicado
+ * @interface ComunicadoRead
+ */
+export interface ComunicadoRead {
+  user_id: string
+  comunicado_id: string
+  read_at: string
+}
+
+/**
+ * Interface para Comunicado com detalhes (anexos e status de leitura)
+ * @interface ComunicadoWithDetails
+ */
+export interface ComunicadoWithDetails extends Comunicado {
+  attachments: ComunicadoAttachment[]
+  is_read: boolean
+  comunicado_reads?: { user_id: string }[]
+  comunicado_attachments?: ComunicadoAttachment[]
+}
+
 // ... (mantenha o restante do arquivo igual)
 // Apenas certifique-se de que não há duplicatas de interfaces abaixo

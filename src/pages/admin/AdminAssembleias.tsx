@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Tooltip from '../../components/ui/Tooltip'
 import PageLayout from '../../components/PageLayout'
 // QRCode será carregado dinamicamente quando necessário
@@ -6,12 +6,16 @@ import { useAssembleias } from '../../hooks/useAssembleias'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Assembleia, AssembleiaPauta } from '../../types'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { NewAssembleiaForm } from '../../components/admin/assembleias/NewAssembleiaForm'
+import { AssembleiasList } from '../../components/admin/assembleias/AssembleiasList'
+import { useAssembleiasQuery } from '../../hooks/queries/assembleias'
+import { EditAssembleiaForm } from '../../components/admin/assembleias/EditAssembleiaForm'
+import { QrPresencaSection } from '../../components/admin/assembleias/QrPresencaSection'
+import { PautasSection } from '../../components/admin/assembleias/PautasSection'
 
 export default function AdminAssembleias() {
   const { canManage, profile } = useAuth()
   const {
-    assembleias,
-    loading,
     reload,
     createAssembleia,
     updateAssembleia,
@@ -24,6 +28,7 @@ export default function AdminAssembleias() {
     abrirVotacao,
     encerrarVotacao,
   } = useAssembleias()
+  const { data: assembleias = [], isLoading: loading } = useAssembleiasQuery()
 
   const [selected, setSelected] = useState<Assembleia | null>(null)
   const [pautas, setPautas] = useState<AssembleiaPauta[]>([])
@@ -133,45 +138,9 @@ export default function AdminAssembleias() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna esquerda: lista e criação */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <h3 className="font-bold text-gray-900 mb-3">Nova Assembleia</h3>
-            <div className="space-y-3">
-              <input className="w-full border rounded-lg px-3 py-2" placeholder="Título" value={newAss.titulo} onChange={e=>setNewAss(s=>({...s, titulo:e.target.value}))} />
-              <input className="w-full border rounded-lg px-3 py-2" type="datetime-local" value={newAss.data_hora} onChange={e=>setNewAss(s=>({...s, data_hora:e.target.value}))} />
-              <textarea className="w-full border rounded-lg px-3 py-2" rows={4} placeholder="Tópicos do edital (1 por linha)" value={newAss.edital_topicos_text} onChange={e=>setNewAss(s=>({...s, edital_topicos_text:e.target.value}))} />
-              <input className="w-full" type="file" accept="application/pdf" onChange={e=>setNewAss(s=>({...s, edital_pdf_file: e.target.files?.[0] || null}))} />
-              <button onClick={handleCreate} className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-bold">Criar</button>
-            </div>
-          </div>
+          <NewAssembleiaForm value={newAss} onChange={setNewAss} onCreate={handleCreate} />
 
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <h3 className="font-bold text-gray-900 mb-3">Assembleias</h3>
-            <div className="space-y-2 max-h-[420px] overflow-auto pr-2">
-              {loading && <LoadingSpinner message="Carregando..." />}
-              {!loading && assembleias.length === 0 && <div className="text-sm text-gray-500">Nenhuma assembleia encontrada.</div>}
-              {assembleias.map(a => (
-                <button key={a.id} onClick={()=>setSelected(a)} className={`w-full text-left px-3 py-2 rounded-lg border ${selected?.id===a.id?'border-purple-400 bg-purple-50':'border-gray-200 hover:bg-gray-50'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">{a.titulo}</span>
-                    <Tooltip content={
-                      a.status === 'agendada' ? 'Agendada' :
-                      a.status === 'em_andamento' ? 'Em andamento' :
-                      a.status === 'encerrada' ? 'Encerrada' :
-                      a.status === 'cancelada' ? 'Cancelada' : 'Status'
-                    }>
-                      <span className="text-xs px-2 py-0.5 rounded-full border" aria-label={`Status: ${a.status}`}>
-                        {a.status === 'agendada' && '📅'}
-                        {a.status === 'em_andamento' && '🟢'}
-                        {a.status === 'encerrada' && '✅'}
-                        {a.status === 'cancelada' && '❌'}
-                      </span>
-                    </Tooltip>
-                  </div>
-                  <div className="text-xs text-gray-600">{new Date(a.data_hora).toLocaleString('pt-BR')}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <AssembleiasList items={assembleias} loading={loading} selectedId={selected?.id ?? null} onSelect={setSelected} />
         </div>
 
         {/* Coluna direita: detalhes e gestão */}
@@ -182,127 +151,30 @@ export default function AdminAssembleias() {
 
           {selected && (
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-xl p-4" data-testid="qr-presenca-section">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-900">Editar Assembleia</h3>
-                  <div className="flex gap-2">
-                    {selected.status === 'agendada' && (
-                      <button onClick={()=>setStatusAssembleia(selected.id, 'em_andamento')} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-bold" data-testid="btn-iniciar-assembleia">Iniciar</button>
-                    )}
-                    {selected.status !== 'encerrada' && selected.status !== 'cancelada' && (
-                      <button onClick={()=>setStatusAssembleia(selected.id, 'encerrada')} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-bold" data-testid="btn-encerrar-assembleia">Encerrar</button>
-                    )}
-                    {selected.status !== 'cancelada' && (
-                      <button onClick={()=>setStatusAssembleia(selected.id, 'cancelada')} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-sm font-bold" data-testid="btn-cancelar-assembleia">Cancelar</button>
-                    )}
-                    <button onClick={()=>{ if(confirm('Excluir assembleia?')) deleteAssembleia(selected.id).then(()=>setSelected(null)) }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold" data-testid="btn-excluir-assembleia">Excluir</button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input className="border rounded-lg px-3 py-2" value={editAss.titulo} onChange={e=>setEditAss(s=>({...s, titulo:e.target.value}))} />
-                  <input className="border rounded-lg px-3 py-2" type="datetime-local" value={editAss.data_hora} onChange={e=>setEditAss(s=>({...s, data_hora:e.target.value}))} />
-                  <div className="md:col-span-1">
-                    <label className="text-xs text-gray-500">Edital (tópicos)</label>
-                    <textarea className="w-full border rounded-lg px-3 py-2" rows={4} value={editAss.edital_topicos_text} onChange={e=>setEditAss(s=>({...s, edital_topicos_text:e.target.value}))} />
-                    <input className="w-full mt-2" type="file" accept="application/pdf" onChange={e=>setEditAss(s=>({...s, edital_pdf_file: e.target.files?.[0] || null}))} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <label className="text-xs text-gray-500">Ata (tópicos)</label>
-                    <textarea className="w-full border rounded-lg px-3 py-2" rows={4} value={editAss.ata_topicos_text} onChange={e=>setEditAss(s=>({...s, ata_topicos_text:e.target.value}))} />
-                    <input className="w-full mt-2" type="file" accept="application/pdf" onChange={e=>setEditAss(s=>({...s, ata_pdf_file: e.target.files?.[0] || null}))} />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <button onClick={handleUpdate} className="px-4 py-2 bg-purple-600 text-white rounded-lg font-bold">Salvar Alterações</button>
-                </div>
-              </div>
+              <EditAssembleiaForm
+                selected={selected}
+                value={editAss}
+                onChange={setEditAss}
+                onUpdate={handleUpdate}
+                onDelete={() => { if (confirm('Excluir assembleia?')) deleteAssembleia(selected.id).then(() => setSelected(null)) }}
+                onStatus={(status) => setStatusAssembleia(selected.id, status)}
+              />
 
-              {/* QR de Presença */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-900">QR de Presença</h3>
-                  <div className="text-xs font-bold px-2 py-1 rounded bg-gray-100 text-gray-700 border">Somente durante a assembleia</div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                  <div className="md:col-span-1 flex items-center justify-center">
-                    <div className="p-3 bg-white border rounded-xl">
-                      {QRCodeComp ? (
-                        <QRCodeComp value={`${window.location.origin}/transparencia/assembleias/${selected.id}/presenca`} size={180} includeMargin={true} />
-                      ) : (
-                        <button
-                          onClick={() => import('qrcode.react').then(mod => setQRCodeComp(() => mod.QRCodeCanvas))}
-                          className="px-4 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700"
-                        >
-                          Carregar QR Code
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <div className="text-sm text-gray-700 break-all">
-                      <span className="font-bold text-gray-900">Link:</span>{' '}
-                      {`${window.location.origin}/transparencia/assembleias/${selected.id}/presenca`}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/transparencia/assembleias/${selected.id}/presenca`) }
-                        className="px-3 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold"
-                      >
-                        Copiar Link
-                      </button>
-                      <a
-                        href={`/transparencia/assembleias/${selected.id}/presenca`}
-                        target="_blank"
-                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold"
-                      >
-                        Abrir em Nova Aba
-                      </a>
-                    </div>
-                    <p className="text-xs text-gray-500">Peça para os moradores escanearem o QR durante a assembleia para registrar presença automaticamente.</p>
-                  </div>
-                </div>
-              </div>
+              <QrPresencaSection
+                assembleiaId={selected.id}
+                loadQRCode={() => import('qrcode.react').then(mod => setQRCodeComp(() => mod.QRCodeCanvas))}
+                QRCodeComp={QRCodeComp}
+              />
 
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-900">Pautas de Votação</h3>
-                  <div className="text-sm text-gray-500">Total: {pautas.length}</div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <input className="border rounded-lg px-3 py-2 md:col-span-2" placeholder="Título da pauta" value={pautaForm.titulo} onChange={e=>setPautaForm(s=>({...s, titulo:e.target.value}))} />
-                  <input className="border rounded-lg px-3 py-2" placeholder="Ordem" type="number" min={1} value={pautaForm.ordem} onChange={e=>setPautaForm(s=>({...s, ordem: Number(e.target.value)}))} />
-                  <select className="border rounded-lg px-3 py-2" value={pautaForm.tipo_votacao} onChange={e=>setPautaForm(s=>({...s, tipo_votacao: e.target.value as any}))}>
-                    <option value="aberta">Votação Aberta</option>
-                    <option value="secreta">Votação Secreta</option>
-                  </select>
-                  <textarea className="md:col-span-3 border rounded-lg px-3 py-2" rows={3} placeholder="Descrição (opcional)" value={pautaForm.descricao} onChange={e=>setPautaForm(s=>({...s, descricao:e.target.value}))} />
-                  <textarea className="md:col-span-3 border rounded-lg px-3 py-2" rows={3} placeholder="Opções (1 por linha)" value={pautaForm.opcoes_text} onChange={e=>setPautaForm(s=>({...s, opcoes_text:e.target.value}))} />
-                  <button onClick={handleAddPauta} className="md:col-span-1 px-4 py-2 bg-green-600 text-white rounded-lg font-bold">Adicionar Pauta</button>
-                </div>
-
-                <div className="mt-4 divide-y">
-                  {pautas.map((p) => (
-                    <div key={p.id} className="py-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-900">{p.ordem}. {p.titulo}</div>
-                        <div className="text-xs text-gray-600">{p.tipo_votacao === 'aberta' ? 'Votação aberta' : 'Votação secreta'} • {p.opcoes.join(', ')}</div>
-                      </div>
-                      <div className="flex gap-2">
-                        {p.status === 'pendente' && (
-                          <button onClick={()=>abrirVotacao(p.id).then(()=>loadPautas(selected.id).then(setPautas))} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-bold" data-testid="btn-abrir-votacao">Abrir Votação</button>
-                        )}
-                        {p.status === 'em_votacao' && (
-                          <button onClick={()=>encerrarVotacao(p.id).then(()=>loadPautas(selected.id).then(setPautas))} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-bold" data-testid="btn-encerrar-votacao">Encerrar</button>
-                        )}
-                        <button onClick={()=>{ if(confirm('Excluir pauta?')) deletePauta(p.id).then(()=>loadPautas(selected.id).then(setPautas)) }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold" data-testid="btn-excluir-pauta">Excluir</button>
-                      </div>
-                    </div>
-                  ))}
-                  {pautas.length === 0 && (
-                    <div className="text-sm text-gray-500">Nenhuma pauta cadastrada.</div>
-                  )}
-                </div>
-              </div>
+              <PautasSection
+                pautas={pautas}
+                form={pautaForm}
+                onChangeForm={setPautaForm}
+                onAdd={handleAddPauta}
+                onAbrir={(id) => abrirVotacao(id).then(() => loadPautas(selected.id).then(setPautas))}
+                onEncerrar={(id) => encerrarVotacao(id).then(() => loadPautas(selected.id).then(setPautas))}
+                onExcluir={(id) => { if (confirm('Excluir pauta?')) deletePauta(id).then(() => loadPautas(selected.id).then(setPautas)) }}
+              />
             </div>
           )}
         </div>

@@ -1,16 +1,13 @@
 import { useState } from 'react'
-import { useChamados } from '../hooks/useChamados'
+import { useChamadosQuery } from '../hooks/queries/chamados'
 import PageLayout from '../components/PageLayout'
 import { ListSkeleton } from '../components/Skeleton'
 
 export default function MeusChamados() {
-  const { chamados, loading } = useChamados()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('todos')
-
-  const filteredChamados = chamados.filter(c => 
-    statusFilter === 'todos' || c.status === statusFilter
-  )
+  
+  const { data: chamados = [], isLoading: loading } = useChamadosQuery(statusFilter)
 
   const statusColors = {
     'aberto': 'bg-yellow-50 border-yellow-200 text-yellow-800',
@@ -68,17 +65,17 @@ export default function MeusChamados() {
         </div>
 
         {/* Lista de Chamados */}
-        {filteredChamados.length === 0 ? (
+        {chamados.length === 0 ? (
           <div className="bg-gray-50 border border-gray-200 p-8 rounded-xl text-center">
             <p className="text-gray-600 text-lg">
-              {chamados.length === 0 
+              {statusFilter === 'todos'
                 ? '📭 Você ainda não criou nenhum chamado'
                 : `📭 Nenhum chamado com o status "${statusFilter}"`}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredChamados.map(chamado => (
+            {chamados.map(chamado => (
               <div
                 key={chamado.id}
                 className={`border rounded-xl overflow-hidden transition hover:shadow-md ${statusColors[chamado.status as keyof typeof statusColors]}`}

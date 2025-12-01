@@ -14,7 +14,9 @@ import type { ComunicadoWithDetails } from '../types'
  * @returns {Error|null} error - Erro durante o carregamento, se houver
  * @example
  * const { comunicados, unreadCount } = useComunicados('importante')
- * console.log(`Você tem ${unreadCount} comunicados não lidos`)\n */\nexport function useComunicados(typeFilter?: string) {
+ * console.log(`Você tem ${unreadCount} comunicados não lidos`)
+ */
+export function useComunicados(typeFilter?: string) {
   const [comunicados, setComunicados] = useState<ComunicadoWithDetails[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)

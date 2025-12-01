@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { logger } from '../lib/logger'
 
 // Logo atualizada
 const logo = '/assets/logos/versix-solutions-logo.png'
@@ -67,7 +68,7 @@ export default function Login() {
         </div>
 
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 animate-shake">
               <span className="text-red-500 mt-0.5">⚠️</span>
