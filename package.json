@@ -18,6 +18,7 @@
     "validate": "npm run typecheck && npm run lint && npm run test -- --run",
     "prepare": "husky install",
     "test:embeddings": "tsx scripts/test-embeddings.ts",
+    "test:query": "tsx scripts/test-query-embedding.ts",
     "setup:qdrant": "tsx scripts/setup-qdrant.ts",
     "reindex:qdrant": "tsx scripts/migrate-to-qdrant.ts",
     "clear:qdrant": "tsx scripts/clear-qdrant.ts",
