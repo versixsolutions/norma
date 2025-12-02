@@ -83,7 +83,7 @@ export default function FAQ() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     new Set(),
   );
@@ -136,16 +136,29 @@ export default function FAQ() {
     {} as Record<string, FAQ[]>,
   );
 
-  // Filtra categorias baseado na busca (se houver busca, expande tudo que der match)
-  const activeCategories = Object.keys(groupedFaqs).filter((catKey) => {
-    if (!searchTerm) return true;
-    // Se tiver busca, verifica se alguma pergunta da categoria dá match
-    return groupedFaqs[catKey].some(
-      (f) =>
-        f.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.answer.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+  // Aplica filtros: categoria selecionada e busca
+  const filteredFaqs = faqs.filter((faq) => {
+    const matchesCategory =
+      !selectedCategory || faq.category === selectedCategory;
+    const matchesSearch =
+      !searchTerm ||
+      faq.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      faq.answer.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesCategory && matchesSearch;
   });
+
+  // Agrupa os FAQs filtrados
+  const filteredGroupedFaqs = filteredFaqs.reduce(
+    (acc, faq) => {
+      const cat = faq.category || "geral";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(faq);
+      return acc;
+    },
+    {} as Record<string, FAQ[]>,
+  );
+
+  const activeCategories = Object.keys(filteredGroupedFaqs);
 
   // --- Lógica de Importação CSV (Mantida igual) ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,7 +239,52 @@ export default function FAQ() {
       subtitle="Tire suas dúvidas sobre o condomínio"
       icon="❓"
     >
-      {/* --- Header de Ações --- */}
+      {/* --- 1. CARDS DE RESUMO --- */}
+      <div className="flex flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 pb-4 mb-6 md:grid md:grid-cols-3 md:overflow-visible md:pb-0 md:snap-none scrollbar-hide">
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Total de Perguntas
+          </p>
+          <div className="flex items-end justify-between">
+            <p className="text-3xl font-bold text-gray-800">{faqs.length}</p>
+            <span className="text-2xl">❓</span>
+          </div>
+        </div>
+
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Categorias
+          </p>
+          <div className="flex items-end justify-between">
+            <p className="text-3xl font-bold text-blue-600">
+              {Object.keys(groupedFaqs).length}
+            </p>
+            <span className="text-2xl">📚</span>
+          </div>
+        </div>
+
+        <div className="min-w-[240px] snap-center bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Mais Popular
+          </p>
+          <div className="flex items-end justify-between">
+            <p className="text-sm font-bold text-purple-600 line-clamp-2">
+              {Object.entries(groupedFaqs).sort(
+                ([, a], [, b]) => b.length - a.length,
+              )[0]?.[0]
+                ? getCategoryInfo(
+                    Object.entries(groupedFaqs).sort(
+                      ([, a], [, b]) => b.length - a.length,
+                    )[0][0],
+                  ).label
+                : "N/A"}
+            </p>
+            <span className="text-2xl">⭐</span>
+          </div>
+        </div>
+      </div>
+
+      {/* --- 2. BARRA DE BUSCA E AÇÕES --- */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <input
@@ -265,7 +323,40 @@ export default function FAQ() {
         )}
       </div>
 
-      {/* --- Lista de Categorias (Accordion) --- */}
+      {/* --- 3. FILTROS DE CATEGORIA --- */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 sticky top-20 z-30">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold border transition shrink-0 ${
+              !selectedCategory
+                ? "bg-gray-800 text-white border-gray-800"
+                : "bg-white text-gray-600 hover:bg-gray-50 border-gray-200"
+            }`}
+          >
+            Todas
+          </button>
+          {Object.entries(CATEGORIES).map(([key, config]) => {
+            const count = groupedFaqs[key]?.length || 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedCategory(key)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold border transition shrink-0 flex items-center gap-1 ${
+                  selectedCategory === key
+                    ? `${config.color} shadow-sm`
+                    : "bg-white text-gray-600 hover:bg-gray-50 border-gray-200"
+                }`}
+              >
+                <span>{config.icon}</span> {config.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* --- 4. LISTA DE PERGUNTAS (AGRUPADAS) --- */}
       <div className="space-y-4 pb-20">
         {activeCategories.length === 0 ? (
           <EmptyState
@@ -276,7 +367,7 @@ export default function FAQ() {
             actions={[
               {
                 label: "Limpar busca",
-                onClick: () => setSearch(""),
+                onClick: () => setSearchTerm(""),
                 variant: "secondary",
               },
               {
@@ -289,18 +380,9 @@ export default function FAQ() {
         ) : (
           activeCategories.map((catKey) => {
             const catInfo = getCategoryInfo(catKey);
-            const questions = groupedFaqs[catKey].filter(
-              (q) =>
-                !searchTerm ||
-                q.question.toLowerCase().includes(searchTerm.toLowerCase()),
-            );
+            const questions = filteredGroupedFaqs[catKey];
 
             if (questions.length === 0) return null;
-
-            // Se tiver busca, expande automaticamente. Se não, respeita o estado manual.
-            const isCatExpanded = searchTerm
-              ? true
-              : expandedCategory === catKey;
 
             return (
               <div
@@ -308,144 +390,123 @@ export default function FAQ() {
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm transition-all duration-300"
               >
                 {/* Header da Categoria */}
-                <button
-                  onClick={() =>
-                    setExpandedCategory(isCatExpanded ? null : catKey)
-                  }
-                  className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition ${isCatExpanded ? "bg-gray-50 border-b border-gray-100" : ""}`}
-                >
+                <div className="p-4 bg-gray-50 border-b border-gray-100">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl border ${catInfo.color.replace("text-", "border-").split(" ")[2]} ${catInfo.color.split(" ")[0]}`}
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl border ${catInfo.color}`}
                     >
                       {catInfo.icon}
                     </div>
-                    <div className="text-left">
+                    <div>
                       <h3 className="font-bold text-gray-800 text-sm md:text-base">
                         {catInfo.label}
                       </h3>
                       <p className="text-xs text-gray-500">
-                        {questions.length} tópicos
+                        {questions.length}{" "}
+                        {questions.length === 1 ? "tópico" : "tópicos"}
                       </p>
                     </div>
                   </div>
-                  <svg
-                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${isCatExpanded ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
+                </div>
 
                 {/* Lista de Perguntas da Categoria */}
-                {isCatExpanded && (
-                  <div className="bg-white animate-fade-in">
-                    {questions.map((faq, idx) => {
-                      const isQExpanded = expandedQuestions.has(faq.id);
-                      return (
-                        <div
-                          key={faq.id}
-                          className={`border-b border-gray-100 last:border-0 ${isQExpanded ? "bg-gray-50/50" : ""}`}
+                <div className="bg-white">
+                  {questions.map((faq, idx) => {
+                    const isQExpanded = expandedQuestions.has(faq.id);
+                    return (
+                      <div
+                        key={faq.id}
+                        className={`border-b border-gray-100 last:border-0 ${isQExpanded ? "bg-gray-50/50" : ""}`}
+                      >
+                        <button
+                          onClick={() => toggleQuestion(faq.id)}
+                          className="w-full text-left p-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition"
                         >
-                          <button
-                            onClick={() => toggleQuestion(faq.id)}
-                            className="w-full text-left p-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition"
-                          >
-                            <span className="mt-0.5 text-gray-400 text-xs font-bold min-w-[1.5rem]">
-                              Q{idx + 1}.
-                            </span>
-                            <div className="flex-1">
-                              <p
-                                className={`text-sm font-medium ${isQExpanded ? "text-primary font-bold" : "text-gray-700"}`}
-                              >
-                                {faq.question}
-                              </p>
-                            </div>
-                            <span className="text-gray-400 text-xs">
-                              {isQExpanded ? "−" : "+"}
-                            </span>
-                          </button>
+                          <span className="mt-0.5 text-gray-400 text-xs font-bold min-w-[1.5rem]">
+                            Q{idx + 1}.
+                          </span>
+                          <div className="flex-1">
+                            <p
+                              className={`text-sm font-medium ${isQExpanded ? "text-primary font-bold" : "text-gray-700"}`}
+                            >
+                              {faq.question}
+                            </p>
+                          </div>
+                          <span className="text-gray-400 text-xs">
+                            {isQExpanded ? "−" : "+"}
+                          </span>
+                        </button>
 
-                          {/* Resposta Expandida */}
-                          {isQExpanded && (
-                            <div className="px-4 pb-4 pt-0 ml-9">
-                              <div className="text-sm text-gray-600 leading-relaxed bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                {faq.answer}
-                                {faq.article_reference && (
-                                  <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                                    📖 Fonte: {faq.article_reference}
-                                  </div>
-                                )}
-                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-xs">
-                                  <span className="text-gray-500">
-                                    Esta resposta foi útil?
-                                  </span>
-                                  <button
-                                    onClick={async () => {
-                                      await recordAIResponseFeedback({
-                                        context: "faq",
-                                        question: faq.question,
-                                        answer: faq.answer,
-                                        source_title:
-                                          faq.article_reference || null,
-                                        source_type: "faq",
-                                        useful: true,
-                                        user_id: null,
-                                        condominio_id:
-                                          profile?.condominio_id || null,
-                                        faq_id: faq.id,
-                                      });
-                                      toast.success(
-                                        "✅ Obrigado pelo feedback!",
-                                      );
-                                    }}
-                                    className="px-2 py-1 rounded-md bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
-                                    aria-label="Resposta útil"
-                                    title="Marcar como útil"
-                                  >
-                                    👍 Útil
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      await recordAIResponseFeedback({
-                                        context: "faq",
-                                        question: faq.question,
-                                        answer: faq.answer,
-                                        source_title:
-                                          faq.article_reference || null,
-                                        source_type: "faq",
-                                        useful: false,
-                                        user_id: null,
-                                        condominio_id:
-                                          profile?.condominio_id || null,
-                                        faq_id: faq.id,
-                                      });
-                                      toast.success(
-                                        "📝 Obrigado! Vamos melhorar esta resposta.",
-                                      );
-                                    }}
-                                    className="px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
-                                    aria-label="Resposta não útil"
-                                    title="Marcar como não útil"
-                                  >
-                                    👎 Não útil
-                                  </button>
+                        {/* Resposta Expandida */}
+                        {isQExpanded && (
+                          <div className="px-4 pb-4 pt-0 ml-9">
+                            <div className="text-sm text-gray-600 leading-relaxed bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                              {faq.answer}
+                              {faq.article_reference && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                  📖 Fonte: {faq.article_reference}
                                 </div>
+                              )}
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-xs">
+                                <span className="text-gray-500">
+                                  Esta resposta foi útil?
+                                </span>
+                                <button
+                                  onClick={async () => {
+                                    await recordAIResponseFeedback({
+                                      context: "faq",
+                                      question: faq.question,
+                                      answer: faq.answer,
+                                      source_title:
+                                        faq.article_reference || null,
+                                      source_type: "faq",
+                                      useful: true,
+                                      user_id: null,
+                                      condominio_id:
+                                        profile?.condominio_id || null,
+                                      faq_id: faq.id,
+                                    });
+                                    toast.success("✅ Obrigado pelo feedback!");
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                                  aria-label="Resposta útil"
+                                  title="Marcar como útil"
+                                >
+                                  👍 Útil
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    await recordAIResponseFeedback({
+                                      context: "faq",
+                                      question: faq.question,
+                                      answer: faq.answer,
+                                      source_title:
+                                        faq.article_reference || null,
+                                      source_type: "faq",
+                                      useful: false,
+                                      user_id: null,
+                                      condominio_id:
+                                        profile?.condominio_id || null,
+                                      faq_id: faq.id,
+                                    });
+                                    toast.success(
+                                      "📝 Obrigado! Vamos melhorar esta resposta.",
+                                    );
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                                  aria-label="Resposta não útil"
+                                  title="Marcar como não útil"
+                                >
+                                  👎 Não útil
+                                </button>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })
