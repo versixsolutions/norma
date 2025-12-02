@@ -60,15 +60,9 @@ export default function AdminSidebar({ onClose }: { onClose?: () => void }) {
     },
 
     {
-      path: "/admin/ia-dashboard",
-      label: "IA & Métricas",
-      icon: "🤖",
-      show: isAdmin,
-    },
-    {
       path: "/admin/ia",
-      label: "Base de Conhecimento",
-      icon: "🧠",
+      label: "Inteligência Artificial",
+      icon: "🤖",
       show: isAdmin || isSindico,
     },
   ];

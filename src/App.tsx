@@ -57,9 +57,6 @@ const VotacoesManagement = lazy(
 const FinanceiroManagement = lazy(
   () => import("./pages/admin/FinanceiroManagement"),
 );
-const KnowledgeBaseManagement = lazy(
-  () => import("./pages/admin/KnowledgeBaseManagement"),
-);
 const MarketplaceManagement = lazy(
   () => import("./pages/admin/MarketplaceManagement"),
 );
@@ -69,7 +66,7 @@ const ChamadosManagement = lazy(
 const FAQImport = lazy(() => import("./pages/admin/FAQImport"));
 const FinanceiroImport = lazy(() => import("./pages/admin/FinanceiroImport"));
 const AdminAssembleias = lazy(() => import("./pages/admin/AdminAssembleias"));
-const AdminIA = lazy(() => import("./pages/admin/AdminIA"));
+const IAManagement = lazy(() => import("./pages/admin/IAManagement"));
 
 // --- PAGES SÍNDICO ---
 const FAQManagement = lazy(() => import("./pages/sindico/FAQManagement"));
@@ -262,8 +259,7 @@ function AppRoutes() {
                   element={<FinanceiroImport />}
                 />
                 <Route path="assembleias" element={<AdminAssembleias />} />
-                <Route path="ia" element={<KnowledgeBaseManagement />} />
-                <Route path="ia-dashboard" element={<AdminIA />} />
+                <Route path="ia" element={<IAManagement />} />
                 <Route path="marketplace" element={<MarketplaceManagement />} />
                 <Route path="faq-import" element={<FAQImport />} />
               </Route>
