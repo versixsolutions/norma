@@ -30,6 +30,56 @@ function getCorsHeaders(origin?: string): Record<string, string> {
   };
 }
 
+// ✅ FUNÇÃO HELPER: FETCH COM TIMEOUT
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Timeout após ${timeoutMs}ms ao chamar ${url}`);
+    }
+    throw error;
+  }
+}
+
+// ✅ FUNÇÃO HELPER: FETCH COM TIMEOUT
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Timeout após ${timeoutMs}ms ao chamar ${url}`);
+    }
+    throw error;
+  }
+}
+
 // ✅ SANITIZA UTF-8 MAL CODIFICADO
 function sanitizeUTF8(text: string): string {
   if (!text) return text;
@@ -82,7 +132,22 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const userId = token.substring(0, 36); // Usar primeiros 36 chars como ID (UUID-like)
 
-    const { query, userName, filter_condominio_id } = await req.json();
+    let query, userName, filter_condominio_id;
+    try {
+      const body = await req.json();
+      query = body.query;
+      userName = body.userName;
+      filter_condominio_id = body.filter_condominio_id;
+    } catch (jsonError) {
+      console.error("❌ Erro ao fazer parse do JSON:", jsonError);
+      return new Response(
+        JSON.stringify({
+          answer: "Erro ao processar requisição. Verifique os dados enviados.",
+          sources: [],
+        }),
+        { status: 400, headers: corsHeaders },
+      );
+    }
 
     // ✅ VALIDAÇÃO CRÍTICA: Todos os parâmetros são obrigatórios
     if (!query) {
@@ -185,49 +250,60 @@ serve(async (req) => {
     if (hasRealEmbedding) {
       console.log("🔎 Busca vetorial semântica no Qdrant...");
 
-      const searchResp = await fetch(
-        `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,
-        {
-          method: "POST",
-          headers: {
-            "api-key": QDRANT_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            vector: queryEmbedding,
-            limit: 5,
-            score_threshold: 0.15,
-            filter: {
-              must: [
-                {
-                  key: "condominio_id",
-                  match: { value: filter_condominio_id },
-                },
-              ],
+      try {
+        const searchResp = await fetchWithTimeout(
+          `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,
+          {
+            method: "POST",
+            headers: {
+              "api-key": QDRANT_API_KEY,
+              "Content-Type": "application/json",
             },
-            with_payload: true,
-          }),
-        },
-      );
-
-      if (!searchResp.ok) {
-        const errorText = await searchResp.text();
-        console.error("❌ Erro na busca vetorial:", errorText);
-      } else {
-        const searchData = await searchResp.json();
-        documentResults = (searchData.result || []).map((r: any) => ({
-          ...r,
-          type: "document",
-          relevance_score: r.score,
-          payload: {
-            ...r.payload,
-            title: sanitizeUTF8(r.payload?.title || ""),
-            content: sanitizeUTF8(r.payload?.content || ""),
+            body: JSON.stringify({
+              vector: queryEmbedding,
+              limit: 5,
+              score_threshold: 0.15,
+              filter: {
+                must: [
+                  {
+                    key: "condominio_id",
+                    match: { value: filter_condominio_id },
+                  },
+                ],
+              },
+              with_payload: true,
+            }),
           },
-        }));
-        console.log(
-          `📄 ${documentResults.length} documentos encontrados via busca vetorial`,
+          20000, // 20 segundos de timeout
         );
+
+        if (!searchResp.ok) {
+          const errorText = await searchResp.text();
+          console.error("❌ Erro na busca vetorial:", errorText);
+        } else {
+          const searchData = await searchResp.json();
+          documentResults = (searchData.result || []).map((r: any) => ({
+            ...r,
+            type: "document",
+            relevance_score: r.score,
+            payload: {
+              ...r.payload,
+              title: sanitizeUTF8(r.payload?.title || ""),
+              content: sanitizeUTF8(r.payload?.content || ""),
+            },
+          }));
+          console.log(
+            `📄 ${documentResults.length} documentos encontrados via busca vetorial`,
+          );
+        }
+      } catch (qdrantError) {
+        console.error(
+          "❌ Erro ao buscar documentos no Qdrant:",
+          qdrantError instanceof Error
+            ? qdrantError.message
+            : String(qdrantError),
+        );
+        // Continuar sem documentos em caso de erro
       }
     }
 
@@ -236,35 +312,46 @@ serve(async (req) => {
     if (!hasRealEmbedding || documentResults.length === 0) {
       console.log("⚠️ Fallback: busca por palavras-chave...");
 
-      const scrollResp = await fetch(
-        `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`,
-        {
-          method: "POST",
-          headers: {
-            "api-key": QDRANT_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            filter: {
-              must: [
-                {
-                  key: "condominio_id",
-                  match: { value: filter_condominio_id },
-                },
-              ],
+      try {
+        const scrollResp = await fetchWithTimeout(
+          `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`,
+          {
+            method: "POST",
+            headers: {
+              "api-key": QDRANT_API_KEY,
+              "Content-Type": "application/json",
             },
-            limit: 50,
-            with_payload: true,
-          }),
-        },
-      );
+            body: JSON.stringify({
+              filter: {
+                must: [
+                  {
+                    key: "condominio_id",
+                    match: { value: filter_condominio_id },
+                  },
+                ],
+              },
+              limit: 50,
+              with_payload: true,
+            }),
+          },
+          20000, // 20 segundos de timeout
+        );
 
-      if (scrollResp.ok) {
-        const scrollData = await scrollResp.json();
-        allPoints = scrollData.result?.points || [];
-      } else {
-        const errorText = await scrollResp.text();
-        console.error("❌ Qdrant Error (scroll):", errorText);
+        if (scrollResp.ok) {
+          const scrollData = await scrollResp.json();
+          allPoints = scrollData.result?.points || [];
+        } else {
+          const errorText = await scrollResp.text();
+          console.error("❌ Qdrant Error (scroll):", errorText);
+          allPoints = [];
+        }
+      } catch (scrollError) {
+        console.error(
+          "❌ Erro no scroll do Qdrant:",
+          scrollError instanceof Error
+            ? scrollError.message
+            : String(scrollError),
+        );
         allPoints = [];
       }
     }
@@ -610,7 +697,7 @@ serve(async (req) => {
     if (hasRealEmbedding) {
       console.log("🎯 Buscando FAQs AI no Qdrant (prioridade máxima)...");
       try {
-        const aiSearchResp = await fetch(
+        const aiSearchResp = await fetchWithTimeout(
           `${QDRANT_URL}/collections/${AI_COLLECTION_NAME}/points/search`,
           {
             method: "POST",
@@ -625,6 +712,7 @@ serve(async (req) => {
               with_payload: true,
             }),
           },
+          20000, // 20 segundos de timeout
         );
         if (aiSearchResp.ok) {
           const aiData = await aiSearchResp.json();
@@ -649,7 +737,10 @@ serve(async (req) => {
           console.warn("⚠️ Qdrant AI collection error:", errText);
         }
       } catch (e) {
-        console.warn("⚠️ Qdrant busca AI falhou", e);
+        console.warn(
+          "⚠️ Qdrant busca AI falhou:",
+          e instanceof Error ? e.message : String(e),
+        );
       }
     }
 
@@ -840,7 +931,8 @@ ${contextText}
     // ===== CHAMAR GROQ LLM =====
     let finalAnswer = "";
     try {
-      const groqResponse = await fetch(
+      console.log("🤖 Enviando requisição para Groq...");
+      const groqResponse = await fetchWithTimeout(
         "https://api.groq.com/openai/v1/chat/completions",
         {
           method: "POST",
@@ -858,20 +950,27 @@ ${contextText}
             max_tokens: 500,
           }),
         },
+        15000, // 15 segundos de timeout
       );
 
       if (!groqResponse.ok) {
         const errorText = await groqResponse.text();
-        console.error("❌ Groq Error:", errorText);
+        console.error(
+          `❌ Groq Error: Status ${groqResponse.status} - ${errorText}`,
+        );
         finalAnswer =
           "Não foi possível gerar a resposta agora. Tente novamente em instantes.";
       } else {
         const groqData = await groqResponse.json();
         finalAnswer =
           groqData.choices?.[0]?.message?.content || "Resposta indisponível.";
+        console.log("✅ Resposta recebida do Groq com sucesso");
       }
     } catch (groqErr) {
-      console.error("❌ Erro inesperado Groq:", groqErr);
+      console.error(
+        "❌ Erro inesperado ao chamar Groq:",
+        groqErr instanceof Error ? groqErr.message : String(groqErr),
+      );
       finalAnswer =
         "Falha temporária ao processar a resposta. Retente em alguns segundos.";
     }
