@@ -6,14 +6,14 @@ A página de FAQs estava vazia (mostrando "Nada encontrado") mesmo com 300+ FAQs
 
 ## Causa Raiz
 
-As políticas RLS (Row Level Security) da tabela `faqs` estavam usando `public.users` ao invés de `public.profiles`:
+As políticas RLS (Row Level Security) da tabela `faqs` tinham referências incorretas:
 
 ```sql
--- ❌ ERRADO
+-- ❌ ERRADO nas versões antigas
 USING (condominio_id = (SELECT condominio_id FROM public.users WHERE id = auth.uid()));
 ```
 
-Como a tabela `public.users` não existe (o sistema usa `public.profiles`), a query retornava **NULL** e bloqueava todo acesso às FAQs.
+As políticas antigas estavam incorretas ou mal configuradas, bloqueando todo acesso às FAQs.
 
 ## Solução
 
@@ -35,7 +35,7 @@ Execute o script `docs/FIX_FAQ_RLS.sql` no **Supabase SQL Editor**:
    - `faq_update_policy` - Atualização para síndicos e admins
    - `faq_delete_policy` - Exclusão apenas para admins
 
-3. ✅ Lista as políticas criadas para verificação
+Todas as políticas agora referenciam corretamente a tabela `public.users`.
 
 ## Teste
 
@@ -58,6 +58,6 @@ SELECT COUNT(*) FROM public.faqs;
 
 Ao criar novas tabelas com RLS, sempre verificar:
 
-- ✅ Usar `public.profiles` (não `public.users`)
+- ✅ Usar `public.users` (tabela correta do sistema)
+- ✅ Verificar campos disponíveis: `id`, `email`, `role`, `condominio_id`, etc.
 - ✅ Testar com `anon_key` após criar políticas
-- ✅ Não usar funções inexistentes como `get_user_role()`

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- FIX FAQ RLS POLICIES
 -- ============================================================================
--- Problema: Políticas RLS estavam usando public.users ao invés de public.profiles
+-- Problema: Políticas RLS antigas estavam com referências incorretas
 -- Data: 2025-12-03
 
 -- 1. Dropar políticas antigas com nomes incorretos
@@ -16,7 +16,7 @@ ON public.faqs FOR SELECT
 USING (
   condominio_id = (
     SELECT condominio_id 
-    FROM public.profiles 
+    FROM public.users 
     WHERE id = auth.uid()
   )
 );
@@ -27,7 +27,7 @@ ON public.faqs FOR INSERT
 WITH CHECK (
   EXISTS (
     SELECT 1 
-    FROM public.profiles 
+    FROM public.users 
     WHERE id = auth.uid() 
     AND role IN ('sindico', 'admin')
   )
@@ -39,7 +39,7 @@ ON public.faqs FOR UPDATE
 USING (
   condominio_id = (
     SELECT condominio_id 
-    FROM public.profiles 
+    FROM public.users 
     WHERE id = auth.uid() 
     AND role IN ('sindico', 'admin')
   )
@@ -47,7 +47,7 @@ USING (
 WITH CHECK (
   condominio_id = (
     SELECT condominio_id 
-    FROM public.profiles 
+    FROM public.users 
     WHERE id = auth.uid() 
     AND role IN ('sindico', 'admin')
   )
@@ -59,28 +59,8 @@ ON public.faqs FOR DELETE
 USING (
   EXISTS (
     SELECT 1 
-    FROM public.profiles 
+    FROM public.users 
     WHERE id = auth.uid() 
     AND role = 'admin'
   )
 );
-
--- 3. Verificar políticas criadas
-SELECT 
-  schemaname, 
-  tablename, 
-  policyname, 
-  CASE cmd
-    WHEN 'r' THEN 'SELECT'
-    WHEN 'a' THEN 'INSERT'
-    WHEN 'w' THEN 'UPDATE'
-    WHEN 'd' THEN 'DELETE'
-    WHEN '*' THEN 'ALL'
-  END as command,
-  roles
-FROM pg_policies 
-WHERE tablename = 'faqs'
-ORDER BY policyname;
-
--- 4. Testar contagem de FAQs (deve retornar > 0 se houver FAQs no condomínio do usuário)
-SELECT COUNT(*) as total_faqs FROM public.faqs;
