@@ -1,3 +1,56 @@
+-- Normalization and validation fixes appended by migration
+-- Ensures data conforms to CHECK constraints without manual per-row edits
+
+-- 1) Fix invalid scenario_type values using tone-based heuristics
+-- Allowed scenario_type: simple, conflict, emergency, procedural, educational
+-- Some inserts used 'warning' mistakenly as scenario_type; correct them here
+UPDATE faqs
+SET scenario_type = 'emergency'
+WHERE scenario_type = 'warning' AND tone = 'urgent';
+
+UPDATE faqs
+SET scenario_type = 'educational'
+WHERE scenario_type = 'warning' AND tone = 'formal';
+
+UPDATE faqs
+SET scenario_type = 'procedural'
+WHERE scenario_type = 'warning' AND tone = 'friendly';
+
+-- Fallback: any remaining 'warning' scenario_type default to 'procedural'
+UPDATE faqs
+SET scenario_type = 'procedural'
+WHERE scenario_type = 'warning';
+
+-- 2) Fix accidental scenario_type set to 'formal' (should be a tone)
+UPDATE faqs
+SET scenario_type = 'procedural'
+WHERE scenario_type = 'formal';
+
+-- 3) Guard tone to allowed set; coerce unknowns to 'formal'
+-- Allowed tone: formal, friendly, warning, urgent
+UPDATE faqs
+SET tone = 'formal'
+WHERE tone NOT IN ('formal','friendly','warning','urgent') OR tone IS NULL;
+
+-- 4) Optional: ensure scenario_type is within allowed set; any unknown -> 'procedural'
+UPDATE faqs
+SET scenario_type = 'procedural'
+WHERE scenario_type NOT IN ('simple','conflict','emergency','procedural','educational') OR scenario_type IS NULL;
+
+-- 5) Verification: counts and any remaining invalids
+-- Total FAQs inserted
+SELECT COUNT(*) AS total_faqs FROM faqs;
+
+-- Distribution by scenario_type and tone
+SELECT scenario_type, COUNT(*) AS qty FROM faqs GROUP BY scenario_type ORDER BY qty DESC;
+SELECT tone, COUNT(*) AS qty FROM faqs GROUP BY tone ORDER BY qty DESC;
+
+-- List any rows still violating allowed sets (should return zero rows)
+SELECT id, question, scenario_type, tone
+FROM faqs
+WHERE scenario_type NOT IN ('simple','conflict','emergency','procedural','educational')
+    OR tone NOT IN ('formal','friendly','warning','urgent');
+
 -- ============================================================================
 -- VERSIX NORMA - BASE DE CONHECIMENTO REFORMULADA v2.0
 -- ============================================================================
@@ -280,7 +333,7 @@ ARRAY['Pode contratar professor de natação?', 'Aula na piscina do condomínio?
 ARRAY['crianca', 'supervisao', 'seguranca'],
 ARRAY['crianca', 'filho', 'sozinho', 'supervisao', 'afogamento'],
 'Artigo 29º',
-'warning',
+'emergency',
 'urgent',
 1,
 ARRAY['Filho pode nadar sozinho?', 'Criança sem adulto na piscina?', 'Menor desacompanhado'],
@@ -372,7 +425,7 @@ ARRAY['higiene', 'denuncia', 'comportamento'],
 ARRAY['urinar', 'xixi', 'coco', 'higiene', 'nojento'],
 'Artigo 30º - I',
 'conflict',
-'warning',
+'formal',
 2,
 ARRAY['Pessoa fez xixi na piscina', 'Como denunciar falta de higiene?', 'Comportamento nojento na piscina'],
 '5c624180-5fca-41fd-a5a0-a6e724f45d96'),
@@ -410,7 +463,7 @@ ARRAY['Quanto tempo posso ficar?', 'Tem rodízio de horário?', 'Posso passar o 
 ARRAY['equipamento', 'eletrico', 'seguranca'],
 ARRAY['hidromassagem', 'jet', 'eletrico', 'equipamento', 'seguranca'],
 'Artigo 42º (segurança)',
-'warning',
+'educational',
 'formal',
 3,
 ARRAY['Jet portátil pode?', 'Equipamento elétrico na piscina?', 'Hidro na piscina'],
@@ -514,7 +567,7 @@ ARRAY['Tem raia olímpica?', 'Posso treinar natação?', 'Piscina de 25m?'],
 ARRAY['saude', 'doenca', 'contagio'],
 ARRAY['doenca', 'ferida', 'micose', 'infeccao', 'contagioso'],
 'Artigo 31º',
-'warning',
+'emergency',
 'formal',
 2,
 ARRAY['Pode nadar com micose?', 'Ferida na piscina', 'Doença contagiosa e piscina'],
@@ -540,7 +593,7 @@ ARRAY['Como aquecer a piscina?', 'Sugestão de melhoria', 'Piscina aquecida'],
 ARRAY['seguranca', 'acidente', 'crianca'],
 ARRAY['pular', 'mergulhar', 'cabeça', 'raso', 'perigo'],
 'Artigo 29º (responsabilidade)',
-'warning',
+'emergency',
 'urgent',
 1,
 ARRAY['Criança pulando na parte rasa', 'Perigo de acidente na piscina', 'Mergulho perigoso'],
@@ -627,7 +680,7 @@ ARRAY['horario', 'festa', 'limite'],
 ARRAY['horario', 'ate quando', 'limite', 'madrugada', '1h'],
 'Artigo 5º',
 'simple',
-'warning',
+'formal',
 1,
 ARRAY['Até que horas a festa?', 'Posso ficar até 2h?', 'Horário limite de música'],
 '5c624180-5fca-41fd-a5a0-a6e724f45d96',
@@ -655,7 +708,7 @@ ARRAY['convidados', 'carro', 'estacionamento'],
 ARRAY['carro', 'veiculo', 'convidado', 'estacionar', 'garagem'],
 'Artigo 21º - Parágrafo 4º',
 'simple',
-'warning',
+'formal',
 2,
 ARRAY['Visitante pode estacionar?', 'Carro de convidado entra?', 'Onde convidado estaciona'],
 '5c624180-5fca-41fd-a5a0-a6e724f45d96',
@@ -682,7 +735,7 @@ true),
 ARRAY['limpeza', 'responsabilidade', 'multa'],
 ARRAY['limpar', 'limpeza', 'sujeira', 'responsavel', 'multa'],
 'Artigo 27º - Parágrafo 1º',
-'warning',
+'procedural',
 'formal',
 1,
 ARRAY['Tenho que limpar?', 'Quem limpa o salão?', 'Multa por não limpar'],
@@ -766,7 +819,7 @@ false),
 ARRAY['sublocacao', 'cessao', 'multa'],
 ARRAY['emprestar', 'sublocar', 'ceder', 'amigo', 'proibido'],
 'Artigo 21º',
-'warning',
+'emergency',
 'urgent',
 1,
 ARRAY['Amigo pode usar minha reserva?', 'Emprestar salão', 'Ceder espaço'],
@@ -780,7 +833,7 @@ false),
 ARRAY['comercial', 'proibicao', 'uso'],
 ARRAY['comercial', 'negocio', 'venda', 'politica', 'religiao'],
 'Artigo 21º',
-'warning',
+'educational',
 'formal',
 2,
 ARRAY['Pode fazer reunião de empresa?', 'Evento comercial permitido?', 'Vender produto na festa'],
@@ -1115,7 +1168,7 @@ ARRAY['Filho pode jogar sem mim?', 'Menor sozinho no campo', 'Supervisão de cri
 ARRAY['cachorro', 'animal', 'proibicao'],
 ARRAY['cachorro', 'pet', 'correr', 'campo', 'proibido'],
 'Artigo 34º - Parágrafo 5º',
-'warning',
+'educational',
 'formal',
 2,
 ARRAY['Pet no campo de esportes', 'Cachorro na quadra', 'Animal pode brincar'],
@@ -1954,7 +2007,7 @@ ARRAY['Pagamento não compensou', 'Ainda aparece dívida', 'Comprovante não bai
 ARRAY['compra', 'divida anterior', 'legal'],
 ARRAY['compra', 'comprei', 'divida', 'anterior', 'vendedor'],
 'Artigo 75º e Código Civil Art. 1345',
-'warning',
+'emergency',
 'urgent',
 1,
 ARRAY['Apartamento com dívida', 'Débito do antigo dono', 'Comprei com pendência'],
@@ -2036,7 +2089,7 @@ ARRAY['cobra', 'cobranca', 'administradora', 'responsavel', 'judicial'],
 'formal',
 3,
 ARRAY['Quem cobra a mensalidade', 'Administradora cobra', 'Responsável pela cobrança'],
-'5c624180-5fca-41fd-a5a0-a6e724f45d96'),
+'5c624180-5fca-41fd-a5a0-a6e724f45d96');
 
 -- Continuando as 25 FAQs de Financeiro-Pagamento... (141-150)
 

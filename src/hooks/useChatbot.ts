@@ -341,12 +341,25 @@ export function useChatbot({ isOpen }: UseChatbotParams): UseChatbotReturn {
       const primary =
         sources.find((s) => (s.type || "").toLowerCase() === "faq") ||
         sources[0];
+
+      // Para FAQs, usar article_reference como source_title; para docs, usar title
+      let sourceTitle = null;
+      if (primary) {
+        if (primary.type === "faq") {
+          // FAQ: priorizar article_reference
+          sourceTitle = (primary as any).article_reference || null;
+        } else {
+          // Documento: usar title
+          sourceTitle = primary.title;
+        }
+      }
+
       try {
         await recordAIResponseFeedback({
           context: "chatbot",
           question: lastQuestion,
           answer,
-          source_title: primary?.title,
+          source_title: sourceTitle,
           source_type: primary?.type as any,
           useful,
           user_id: user?.id || null,

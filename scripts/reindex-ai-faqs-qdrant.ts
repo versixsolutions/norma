@@ -1,7 +1,6 @@
 /**
- * Script de Re-indexação das 300 FAQs no Qdrant
- * Gera embeddings REAIS (HuggingFace) para todas as FAQs
- * e popula a collection Qdrant com metadados ricos
+ * Script de Re-indexação das FAQs de IA no Qdrant
+ * Lê public.ai_faqs e popula a collection dedicada (faqs_ai_collection)
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -9,7 +8,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Configurações
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -17,23 +15,21 @@ const supabase = createClient(
 
 const QDRANT_URL = process.env.QDRANT_URL!;
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY!;
-const FAQ_COLLECTION = process.env.QDRANT_FAQ_COLLECTION || "faqs_collection";
+const AI_COLLECTION =
+  process.env.QDRANT_AI_COLLECTION_NAME || "faqs_ai_collection";
 const HF_ENDPOINT_URL = process.env.HUGGINGFACE_ENDPOINT_URL;
 const HF_API_URL =
   HF_ENDPOINT_URL ||
   "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2";
 const HF_TOKEN = process.env.HUGGINGFACE_TOKEN;
 const CONDOMINIO_ID =
-  process.env.FILTER_CONDOMINIO_ID || "5c624180-5fca-41fd-a5a0-a6e724f45d96"; // Pinheiro Park (padrão)
-const INDEX_ALL = process.env.INDEX_ALL_FAQS === "true"; // Se true, indexa todas as FAQs independente de condomínio
+  process.env.FILTER_CONDOMINIO_ID || "5c624180-5fca-41fd-a5a0-a6e724f45d96";
+const INDEX_ALL = process.env.INDEX_ALL_AI_FAQS === "true";
 
-// Validações
 if (!HF_TOKEN) {
   console.error("❌ HUGGINGFACE_TOKEN não encontrado no .env");
-  console.error("   Obtenha em: https://huggingface.co/settings/tokens");
   process.exit(1);
 }
-
 if (!QDRANT_URL || !QDRANT_API_KEY) {
   console.error("❌ QDRANT_URL ou QDRANT_API_KEY não configurados");
   process.exit(1);
@@ -42,17 +38,14 @@ if (!QDRANT_URL || !QDRANT_API_KEY) {
 console.log("🔗 Configurações:");
 console.log(`   - Supabase: ${process.env.VITE_SUPABASE_URL}`);
 console.log(`   - Qdrant: ${QDRANT_URL}`);
-console.log(`   - Collection: ${FAQ_COLLECTION}`);
+console.log(`   - Collection (AI): ${AI_COLLECTION}`);
 console.log(
   `   - HuggingFace: ${HF_ENDPOINT_URL ? "Endpoint Dedicado ✅" : "API Pública ⚠️"}`,
 );
 console.log(
-  `   - Filtro: ${INDEX_ALL ? "TODAS as FAQs" : `Condomínio ${CONDOMINIO_ID}`}\n`,
+  `   - Filtro: ${INDEX_ALL ? "TODAS as FAQs AI" : `Condomínio ${CONDOMINIO_ID}`}\n`,
 );
 
-/**
- * Gera embedding real usando HuggingFace API com retry
- */
 async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -69,7 +62,6 @@ async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
       });
 
       if (resp.status === 503) {
-        // Service Unavailable: retry com backoff exponencial
         const delay = Math.min(
           1000 * Math.pow(2, attempt - 1) + Math.random() * 1000,
           10000,
@@ -77,7 +69,7 @@ async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
         console.warn(
           `   ⚠️  HF 503 (tentativa ${attempt}/${retries}), aguardando ${Math.round(delay)}ms...`,
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise((r) => setTimeout(r, delay));
         continue;
       }
 
@@ -89,178 +81,103 @@ async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
 
       const result = await resp.json();
       let embedding: number[];
-
-      // Tratar diferentes formatos de resposta da API
       if (Array.isArray(result) && Array.isArray(result[0])) {
-        // Resposta multi-token: fazer média
         const numTokens = result.length;
         const dims = result[0].length;
         embedding = new Array(dims).fill(0);
         for (const tokenEmb of result) {
-          for (let i = 0; i < dims; i++) {
+          for (let i = 0; i < dims; i++)
             embedding[i] += tokenEmb[i] / numTokens;
-          }
         }
       } else if (Array.isArray(result)) {
-        // Resposta direta
         embedding = result;
       } else {
         console.error("   ⚠️  Formato inesperado de resposta HuggingFace");
         return Array(384).fill(0);
       }
-
-      // Normalizar vetor
-      const magnitude =
-        Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0)) || 1;
-      return embedding.map((v) => v / magnitude);
+      const mag = Math.sqrt(embedding.reduce((s, v) => s + v * v, 0)) || 1;
+      return embedding.map((v) => v / mag);
     } catch (err) {
       console.error(`   ⚠️  Exceção na tentativa ${attempt}: ${err}`);
-      if (attempt === retries) {
-        console.error(
-          "   ❌ Todas as tentativas falharam, retornando vetor dummy",
-        );
-        return Array(384).fill(0);
-      }
+      if (attempt === retries) return Array(384).fill(0);
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
   return Array(384).fill(0);
 }
 
-/**
- * Verifica ou cria a collection de FAQs no Qdrant
- */
 async function ensureCollection() {
-  console.log("🔍 Verificando collection no Qdrant...");
-
-  // Verificar se collection existe
-  const checkResp = await fetch(`${QDRANT_URL}/collections/${FAQ_COLLECTION}`, {
+  console.log("🔍 Verificando collection AI no Qdrant...");
+  const checkResp = await fetch(`${QDRANT_URL}/collections/${AI_COLLECTION}`, {
     headers: { "api-key": QDRANT_API_KEY },
   });
 
   if (checkResp.ok) {
-    console.log(`   ✅ Collection '${FAQ_COLLECTION}' já existe`);
-
-    // Limpar dados antigos (se filtrar por condomínio; caso contrário limpa tudo)
+    console.log(`   ✅ Collection '${AI_COLLECTION}' já existe`);
     console.log("   🗑️  Limpando dados antigos...");
     const deleteBody = INDEX_ALL
-      ? { filter: { must: [] } } // Limpa tudo
+      ? { filter: { must: [] } }
       : {
           filter: {
-            must: [
-              {
-                key: "condominio_id",
-                match: { value: CONDOMINIO_ID },
-              },
-            ],
+            must: [{ key: "condominio_id", match: { value: CONDOMINIO_ID } }],
           },
         };
-
-    const deleteResp = await fetch(
-      `${QDRANT_URL}/collections/${FAQ_COLLECTION}/points/delete`,
-      {
-        method: "POST",
-        headers: {
-          "api-key": QDRANT_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(deleteBody),
-      },
-    );
-
-    if (deleteResp.ok) {
-      console.log("   ✅ Dados antigos removidos\n");
-    }
-    return;
-  }
-
-  // Criar collection
-  console.log(`   📦 Criando collection '${FAQ_COLLECTION}'...`);
-  const createResp = await fetch(
-    `${QDRANT_URL}/collections/${FAQ_COLLECTION}`,
-    {
-      method: "PUT",
+    await fetch(`${QDRANT_URL}/collections/${AI_COLLECTION}/points/delete`, {
+      method: "POST",
       headers: {
         "api-key": QDRANT_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        vectors: {
-          size: 384,
-          distance: "Cosine",
-        },
-        optimizers_config: {
-          default_segment_number: 2,
-        },
-        replication_factor: 1,
-      }),
-    },
-  );
-
-  if (!createResp.ok) {
-    const error = await createResp.text();
-    throw new Error(`Erro ao criar collection: ${error}`);
+      body: JSON.stringify(deleteBody),
+    });
+    return;
   }
 
+  console.log(`   📦 Criando collection '${AI_COLLECTION}'...`);
+  const resp = await fetch(`${QDRANT_URL}/collections/${AI_COLLECTION}`, {
+    method: "PUT",
+    headers: { "api-key": QDRANT_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      vectors: { size: 384, distance: "Cosine" },
+      optimizers_config: { default_segment_number: 2 },
+      replication_factor: 1,
+    }),
+  });
+  if (!resp.ok) throw new Error(await resp.text());
   console.log("   ✅ Collection criada\n");
 }
 
-/**
- * Busca todas as FAQs do Supabase
- */
-async function fetchFAQs() {
-  console.log("📥 Buscando FAQs do Supabase...");
-
+async function fetchAIFAQs() {
+  console.log("📥 Buscando AI FAQs do Supabase...");
   let query = supabase
-    .from("faqs")
+    .from("ai_faqs")
     .select("*")
     .order("created_at", { ascending: true });
-
-  if (!INDEX_ALL) {
-    query = query.eq("condominio_id", CONDOMINIO_ID);
-  }
-
-  const { data: faqs, error } = await query;
-
-  if (error) {
-    throw new Error(`Erro ao buscar FAQs: ${error.message}`);
-  }
-
-  if (!faqs || faqs.length === 0) {
-    throw new Error("Nenhuma FAQ encontrada no banco de dados");
-  }
-
-  console.log(`   ✅ ${faqs.length} FAQs encontradas\n`);
-  return faqs;
+  if (!INDEX_ALL) query = query.eq("condominio_id", CONDOMINIO_ID);
+  const { data, error } = await query;
+  if (error) throw new Error(`Erro ao buscar AI FAQs: ${error.message}`);
+  if (!data || data.length === 0) throw new Error("Nenhuma AI FAQ encontrada");
+  console.log(`   ✅ ${data.length} AI FAQs encontradas\n`);
+  return data;
 }
 
-/**
- * Indexa FAQs no Qdrant em lotes
- */
-async function indexFAQs(faqs: any[]) {
-  console.log("🔄 Iniciando indexação no Qdrant...\n");
-
-  const BATCH_SIZE = 10; // Processar 10 FAQs por vez
-  let pointId = Date.now(); // ID sequencial baseado em timestamp
-  let totalIndexed = 0;
+async function indexAIFAQs(faqs: any[]) {
+  console.log("🔄 Iniciando indexação (AI) no Qdrant...\n");
+  const BATCH_SIZE = 10;
+  let pointId = Date.now();
+  let total = 0;
 
   for (let i = 0; i < faqs.length; i += BATCH_SIZE) {
     const batch = faqs.slice(i, i + BATCH_SIZE);
     const points: any[] = [];
-
     console.log(
       `📦 Lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(faqs.length / BATCH_SIZE)} (FAQs ${i + 1}-${Math.min(i + BATCH_SIZE, faqs.length)})`,
     );
 
     for (const faq of batch) {
-      // Combinar pergunta + resposta para embedding
       const text = `${faq.question} ${faq.answer}`;
-
-      // Gerar embedding REAL
       const embedding = await generateEmbedding(text);
-
-      // Criar ponto com metadados ricos
       points.push({
         id: pointId++,
         vector: embedding,
@@ -272,7 +189,6 @@ async function indexFAQs(faqs: any[]) {
           tags: faq.tags || [],
           keywords: faq.keywords || [],
           article_reference: faq.article_reference || null,
-          legal_source: faq.legal_source || null,
           scenario_type: faq.scenario_type || "simple",
           tone: faq.tone || "friendly",
           priority: faq.priority || 3,
@@ -284,15 +200,12 @@ async function indexFAQs(faqs: any[]) {
           created_at: faq.created_at,
         },
       });
-
-      // Pequeno delay para não sobrecarregar API
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((r) => setTimeout(r, 100));
     }
 
-    // Enviar lote para Qdrant
     console.log(`   📤 Enviando ${points.length} pontos...`);
-    const response = await fetch(
-      `${QDRANT_URL}/collections/${FAQ_COLLECTION}/points`,
+    const resp = await fetch(
+      `${QDRANT_URL}/collections/${AI_COLLECTION}/points`,
       {
         method: "PUT",
         headers: {
@@ -302,37 +215,25 @@ async function indexFAQs(faqs: any[]) {
         body: JSON.stringify({ points }),
       },
     );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`   ❌ Erro ao indexar lote: ${errorText}`);
+    if (!resp.ok) {
+      console.error(`   ❌ Erro ao indexar lote: ${await resp.text()}`);
       continue;
     }
-
-    totalIndexed += points.length;
+    total += points.length;
     console.log(
-      `   ✅ ${points.length} pontos indexados (Total: ${totalIndexed}/${faqs.length})\n`,
+      `   ✅ ${points.length} pontos indexados (Total: ${total}/${faqs.length})\n`,
     );
   }
-
-  return totalIndexed;
+  return total;
 }
 
-/**
- * Exibe estatísticas finais
- */
 async function showStats() {
-  console.log("📊 Estatísticas da Collection:");
-
-  const infoResp = await fetch(`${QDRANT_URL}/collections/${FAQ_COLLECTION}`, {
+  console.log("📊 Estatísticas da Collection AI:");
+  const infoResp = await fetch(`${QDRANT_URL}/collections/${AI_COLLECTION}`, {
     headers: { "api-key": QDRANT_API_KEY },
   });
-
-  if (!infoResp.ok) {
-    console.log("   ⚠️  Não foi possível obter estatísticas");
-    return;
-  }
-
+  if (!infoResp.ok)
+    return console.log("   ⚠️  Não foi possível obter estatísticas");
   const info = await infoResp.json();
   console.log(`   - Pontos indexados: ${info.result.points_count}`);
   console.log(
@@ -345,49 +246,34 @@ async function showStats() {
   );
 }
 
-/**
- * Função principal
- */
 async function main() {
   console.log(
     "============================================================================",
   );
-  console.log("🚀 RE-INDEXAÇÃO DE 300 FAQs NO QDRANT");
+  console.log("🚀 RE-INDEXAÇÃO DE AI FAQs NO QDRANT");
   console.log(
     "============================================================================\n",
   );
-
   try {
-    // 1. Verificar/criar collection
     await ensureCollection();
-
-    // 2. Buscar FAQs do Supabase
-    const faqs = await fetchFAQs();
-
-    // 3. Indexar no Qdrant
-    const totalIndexed = await indexFAQs(faqs);
-
-    // 4. Exibir estatísticas
+    const faqs = await fetchAIFAQs();
+    const total = await indexAIFAQs(faqs);
     await showStats();
-
     console.log(
       "============================================================================",
     );
-    console.log("✅ RE-INDEXAÇÃO CONCLUÍDA COM SUCESSO!");
+    console.log("✅ RE-INDEXAÇÃO (AI) CONCLUÍDA COM SUCESSO!");
     console.log(
       "============================================================================",
     );
-    console.log(`   📚 FAQs indexadas: ${totalIndexed}`);
-    console.log(`   🔍 Collection: ${FAQ_COLLECTION}`);
-    console.log(`   ✨ Embeddings: REAIS (HuggingFace)`);
-    console.log("\n📝 Próximos passos:");
-    console.log("   1. Testar queries no chatbot");
-    console.log("   2. Validar relevância das respostas");
-    console.log("   3. Ajustar threshold de similaridade se necessário");
-    console.log("   4. Monitorar métricas de satisfação\n");
-  } catch (error: any) {
+    console.log(`   📚 AI FAQs indexadas: ${total}`);
+    console.log(`   🔍 Collection: ${AI_COLLECTION}`);
+    console.log(
+      "\n📝 Próximos passos:\n   1. Testar chatbot com AI DB\n   2. Validar relevância\n   3. Ajustar threshold\n",
+    );
+  } catch (err: any) {
     console.error("\n❌ ERRO FATAL:");
-    console.error(`   ${error.message}\n`);
+    console.error(`   ${err.message}\n`);
     process.exit(1);
   }
 }

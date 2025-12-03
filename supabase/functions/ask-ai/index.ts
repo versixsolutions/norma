@@ -106,6 +106,8 @@ serve(async (req) => {
     const QDRANT_API_KEY = Deno.env.get("QDRANT_API_KEY");
     const COLLECTION_NAME =
       Deno.env.get("QDRANT_COLLECTION_NAME") || "norma_knowledge_base";
+    const AI_COLLECTION_NAME =
+      Deno.env.get("QDRANT_AI_COLLECTION_NAME") || "faqs_ai_collection";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
@@ -267,17 +269,19 @@ serve(async (req) => {
       }
     }
 
-    // ===== BUSCA DE FAQs =====
-    console.log("❓ Buscando FAQs relevantes...");
+    // ===== BUSCA DE FAQs (AI) =====
+    console.log("❓ Buscando FAQs da base AI...");
     let faqs: any[] = [];
 
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       try {
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const { data: faqData, error: faqError } = await supabase
-          .from("faqs")
-          .select("id, question, answer, created_at, condominio_id")
-          .eq("condominio_id", filter_condominio_id)
+          .from("ai_faqs")
+          .select(
+            "id, question, answer, article_reference, category, created_at, condominio_id",
+          )
+          .or(`condominio_id.eq.${filter_condominio_id},condominio_id.is.null`)
           .order("created_at", { ascending: false });
 
         if (!faqError && faqData) {
@@ -537,8 +541,52 @@ serve(async (req) => {
       }
     }
 
-    // Priorizar FAQs: primeiro FAQs, depois documentos
-    const allResults = [...faqResults, ...documentResults]
+    // ===== BUSCA VETORIAL EM QDRANT PARA AI FAQs (opcional)
+    let aiVectorResults: any[] = [];
+    if (hasRealEmbedding) {
+      try {
+        const aiSearchResp = await fetch(
+          `${QDRANT_URL}/collections/${AI_COLLECTION_NAME}/points/search`,
+          {
+            method: "POST",
+            headers: {
+              "api-key": QDRANT_API_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              vector: queryEmbedding,
+              limit: 3,
+              score_threshold: 0.15,
+              with_payload: true,
+            }),
+          },
+        );
+        if (aiSearchResp.ok) {
+          const aiData = await aiSearchResp.json();
+          aiVectorResults = (aiData.result || []).map((r: any) => ({
+            ...r,
+            type: "faq",
+            relevance_score: r.score,
+            payload: {
+              ...r.payload,
+              title: sanitizeUTF8(r.payload?.question || ""),
+              content: sanitizeUTF8(r.payload?.answer || ""),
+              article_reference: r.payload?.article_reference
+                ? sanitizeUTF8(r.payload.article_reference)
+                : undefined,
+            },
+          }));
+          console.log(
+            `🧩 FAQs AI via vetor: ${aiVectorResults.length} resultado(s)`,
+          );
+        }
+      } catch (e) {
+        console.warn("⚠️ Qdrant busca AI falhou", e);
+      }
+    }
+
+    // Priorizar FAQs: primeiro FAQs (AI), depois documentos
+    const allResults = [...aiVectorResults, ...faqResults, ...documentResults]
       .sort((a, b) => b.relevance_score - a.relevance_score)
       .slice(0, 4);
 

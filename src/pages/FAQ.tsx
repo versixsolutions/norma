@@ -20,51 +20,127 @@ interface FAQ {
 }
 
 const CATEGORIES: Record<string, any> = {
-  horarios: {
-    label: "Horários",
-    icon: "⏰",
-    color: "bg-blue-50 text-blue-700 border-blue-200",
+  // Área de lazer
+  area_lazer_piscina: {
+    label: "Área de Lazer — Piscina",
+    icon: "🏊",
+    color: "bg-cyan-50 text-cyan-700 border-cyan-200",
   },
-  area_lazer: {
-    label: "Área de Lazer",
+  area_lazer_festas: {
+    label: "Área de Lazer — Festas",
+    icon: "🎉",
+    color: "bg-pink-50 text-pink-700 border-pink-200",
+  },
+  area_lazer_esportes: {
+    label: "Área de Lazer — Esportes",
     icon: "⚽",
     color: "bg-orange-50 text-orange-700 border-orange-200",
   },
-  animais: {
-    label: "Animais",
+
+  // Animais
+  animais_passeio: {
+    label: "Animais — Passeio",
     icon: "🐾",
     color: "bg-amber-50 text-amber-700 border-amber-200",
   },
-  garagem: {
-    label: "Garagem",
-    icon: "🚗",
-    color: "bg-zinc-50 text-zinc-700 border-zinc-200",
+  animais_restricoes: {
+    label: "Animais — Restrições",
+    icon: "🚫",
+    color: "bg-rose-50 text-rose-700 border-rose-200",
   },
-  lixo: {
-    label: "Lixo",
-    icon: "♻️",
+
+  // Financeiro
+  financeiro_pagamento: {
+    label: "Financeiro — Pagamento",
+    icon: "💳",
+    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  financeiro_cobranca: {
+    label: "Financeiro — Cobrança",
+    icon: "💰",
     color: "bg-green-50 text-green-700 border-green-200",
   },
-  obras: {
-    label: "Obras",
-    icon: "🔨",
-    color: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  },
-  seguranca: {
-    label: "Segurança",
+
+  // Segurança
+  seguranca_acesso: {
+    label: "Segurança — Acesso",
     icon: "🛡️",
     color: "bg-red-50 text-red-700 border-red-200",
   },
-  financeiro: {
-    label: "Financeiro",
-    icon: "💰",
-    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  seguranca_emergencia: {
+    label: "Segurança — Emergência",
+    icon: "🚨",
+    color: "bg-red-50 text-red-700 border-red-200",
   },
-  penalidades: {
-    label: "Multas",
+
+  // Obras
+  obras_pequenas: {
+    label: "Obras — Pequenas",
+    icon: "🧰",
+    color: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  },
+  obras_grandes: {
+    label: "Obras — Grandes",
+    icon: "🏗️",
+    color: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  },
+
+  // Governança
+  governanca_assembleia: {
+    label: "Governança — Assembleia",
+    icon: "🗳️",
+    color: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  governanca_sindico: {
+    label: "Governança — Síndico",
+    icon: "👤",
+    color: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+
+  // Conflitos
+  conflitos_vizinhos: {
+    label: "Conflitos — Vizinhos",
+    icon: "🤝",
+    color: "bg-slate-50 text-slate-700 border-slate-200",
+  },
+  conflitos_multas: {
+    label: "Conflitos — Multas",
     icon: "⚠️",
     color: "bg-rose-50 text-rose-700 border-rose-200",
   },
+
+  // Horários
+  horarios_silencio: {
+    label: "Horários — Silêncio",
+    icon: "🔇",
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  horarios_servicos: {
+    label: "Horários — Serviços",
+    icon: "🧹",
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+
+  // Lixo
+  lixo_coleta: {
+    label: "Lixo — Coleta",
+    icon: "🗑️",
+    color: "bg-green-50 text-green-700 border-green-200",
+  },
+  lixo_reciclagem: {
+    label: "Lixo — Reciclagem",
+    icon: "♻️",
+    color: "bg-green-50 text-green-700 border-green-200",
+  },
+
+  // Veículos
+  veiculos_estacionamento: {
+    label: "Veículos — Estacionamento",
+    icon: "🚗",
+    color: "bg-zinc-50 text-zinc-700 border-zinc-200",
+  },
+
+  // Fallback
   geral: {
     label: "Geral",
     icon: "📋",
@@ -73,8 +149,22 @@ const CATEGORIES: Record<string, any> = {
 };
 
 function getCategoryInfo(categoryKey: string) {
-  const normalized = categoryKey?.toLowerCase() || "geral";
-  return CATEGORIES[normalized] || CATEGORIES["geral"];
+  const key = (categoryKey || "geral").toLowerCase();
+  if (CATEGORIES[key]) return CATEGORIES[key];
+  // Mapear categorias antigas para novas, caso existam registros legados
+  const legacyMap: Record<string, string> = {
+    horarios: "horarios_silencio",
+    area_lazer: "area_lazer_piscina",
+    animais: "animais_passeio",
+    garagem: "veiculos_estacionamento",
+    lixo: "lixo_coleta",
+    obras: "obras_pequenas",
+    seguranca: "seguranca_acesso",
+    financeiro: "financeiro_pagamento",
+    penalidades: "conflitos_multas",
+  };
+  const mapped = legacyMap[key] || "geral";
+  return CATEGORIES[mapped] || CATEGORIES["geral"];
 }
 
 export default function FAQ() {
