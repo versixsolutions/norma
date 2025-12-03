@@ -431,9 +431,26 @@ serve(async (req) => {
                 .toLowerCase()
                 .normalize("NFD")
                 .replace(/\p{Diacritic}/gu, "");
-              const containsPiscina = /\bpiscina\b/.test(fq);
-              const containsHorario = /\bhorario\b|\bhorário\b/.test(fq);
-              const keywordBoost = containsPiscina && containsHorario ? 0.3 : 0;
+              // Common condo topics boosts
+              const fqWords = fq.split(/\s+/);
+              const kw = {
+                piscina: /\bpiscina\b/.test(fq),
+                horario: /\bhorario\b|\bhorário\b/.test(fq),
+                sindico: /\bsindico\b|\bsíndico\b/.test(fq),
+                churrasqueira: /\bchurrasqueira\b/.test(fq),
+                salaofestas: /\bsalao\b|\bsalão\b|\bfesta\b|\bfestas\b/.test(
+                  fq,
+                ),
+                convidados: /\bconvidados\b|\bconvidado\b/.test(fq),
+                reserva: /\breserva\b|\breservar\b/.test(fq),
+              };
+              let keywordBoost = 0;
+              if (kw.piscina && kw.horario) keywordBoost += 0.3;
+              if (kw.sindico) keywordBoost += 0.2;
+              if (kw.churrasqueira) keywordBoost += 0.15;
+              if (kw.salaofestas) keywordBoost += 0.15;
+              if (kw.convidados) keywordBoost += 0.1;
+              if (kw.reserva) keywordBoost += 0.1;
               return {
                 ...faq,
                 type: "faq",
@@ -453,7 +470,18 @@ serve(async (req) => {
               // Strong keyword boost in fallback for piscina + horário
               const containsPiscina = /\bpiscina\b/.test(q);
               const containsHorario = /\bhorario\b|\bhorário\b/.test(q);
+              const containsSindico = /\bsindico\b|\bsíndico\b/.test(q);
+              const containsChurrasqueira = /\bchurrasqueira\b/.test(q);
+              const containsSalao =
+                /\bsalao\b|\bsalão\b|\bfestas\b|\bfesta\b/.test(q);
+              const containsConvidados = /\bconvidados\b|\bconvidado\b/.test(q);
+              const containsReserva = /\breserva\b|\breservar\b/.test(q);
               if (containsPiscina && containsHorario) score += 5;
+              if (containsSindico) score += 3;
+              if (containsChurrasqueira) score += 2;
+              if (containsSalao) score += 2;
+              if (containsConvidados) score += 2;
+              if (containsReserva) score += 2;
               return {
                 ...faq,
                 type: "faq",
