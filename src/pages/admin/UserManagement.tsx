@@ -35,10 +35,8 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"pending" | "active">("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -64,7 +62,7 @@ export default function UserManagement() {
     }
   }, [selectedCondominioId, loadUsers]);
 
-  async function handleDelete(id: string) {
+  async function handleApprove(id: string) {
     if (!confirm("Confirmar aprovação deste morador?")) return;
     setProcessingId(id);
     const toastId = toast.loading("Aprovando...");

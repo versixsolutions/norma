@@ -53,7 +53,7 @@ jobs:
         run: npm install
 
       - name: Run tests with coverage
-        run: npm run test:coverage -- --runInBand --watch=false || npm run test:coverage -- --watch=false
+        run: npm run test:coverage -- --watch=false
 
       - name: Check global coverage threshold (temporary 10%)
         run: |

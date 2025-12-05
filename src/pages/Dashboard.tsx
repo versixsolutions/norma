@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDashboardStats } from "../hooks/useDashboardStats";
@@ -53,86 +53,7 @@ export default function Dashboard() {
     }
   }, [isAdmin, navigate]);
 
-  useEffect(() => {
-    if (profile?.condominio_id && !isAdmin) {
-      loadUnifiedFeed();
-      loadBanner();
-    } else {
-      setLoadingUpdates(false);
-    }
-  }, [profile?.condominio_id, isAdmin, loadUnifiedFeed]);
-
-  async function loadBanner() {
-    try {
-      const { data } = await supabase
-        .from("marketplace_ads")
-        .select("*")
-        .eq("active", true)
-        .order("created_at", { ascending: false });
-
-      if (data && data.length > 0) {
-        setBanners(data);
-        // Tenta incrementar view do primeiro banner de forma segura (fire and forget)
-        try {
-          await supabase.rpc("increment_ad_view", { ad_id: data[0].id });
-        } catch (err) {
-          console.warn("Falha ao registrar view do banner (silencioso):", err);
-        }
-      }
-    } catch (error) {
-      console.error("Erro banner:", error);
-    }
-  }
-
-  // Auto-rotação dos banners a cada 5 segundos
-  useEffect(() => {
-    if (banners.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentBannerIndex((prev) => {
-        const nextIndex = (prev + 1) % banners.length;
-        // Registra view do próximo banner
-        try {
-          supabase.rpc("increment_ad_view", { ad_id: banners[nextIndex].id });
-        } catch (err) {
-          console.warn("Falha ao registrar view do banner:", err);
-        }
-        return nextIndex;
-      });
-    }, 5000); // 5 segundos
-
-    return () => clearInterval(interval);
-  }, [banners]);
-
-  const handleBannerClick = async (banner: BannerAd) => {
-    if (banner) {
-      // 1. Tenta registrar o clique (fire and forget)
-      try {
-        const { error } = await supabase.rpc("increment_ad_click", {
-          ad_id: banner.id,
-        });
-        if (error) console.warn("Erro RPC Click:", error);
-      } catch (err) {
-        console.warn("Erro ao chamar RPC Click:", err);
-      }
-
-      // 2. Abre o link (Prioridade)
-      if (banner.link_url) {
-        window.open(banner.link_url, "_blank");
-      }
-    }
-  };
-
-  const goToBanner = (index: number) => {
-    setCurrentBannerIndex(index);
-    // Registra view
-    try {
-      supabase.rpc("increment_ad_view", { ad_id: banners[index].id });
-    } catch (err) {
-      console.warn("Falha ao registrar view:", err);
-    }
-  };
-
+  // Declaração acima do uso para evitar TDZ
   const loadUnifiedFeed = useCallback(async () => {
     setLoadingUpdates(true);
     const fetchData = async (table: string, queryBuilder: any) => {
@@ -301,6 +222,88 @@ export default function Dashboard() {
       setLoadingUpdates(false);
     }
   }, [profile?.condominio_id]);
+
+  useEffect(() => {
+    if (profile?.condominio_id && !isAdmin) {
+      loadUnifiedFeed();
+      loadBanner();
+    } else {
+      setLoadingUpdates(false);
+    }
+  }, [profile?.condominio_id, isAdmin, loadUnifiedFeed]);
+
+  async function loadBanner() {
+    try {
+      const { data } = await supabase
+        .from("marketplace_ads")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false });
+
+      if (data && data.length > 0) {
+        setBanners(data);
+        // Tenta incrementar view do primeiro banner de forma segura (fire and forget)
+        try {
+          await supabase.rpc("increment_ad_view", { ad_id: data[0].id });
+        } catch (err) {
+          console.warn("Falha ao registrar view do banner (silencioso):", err);
+        }
+      }
+    } catch (error) {
+      console.error("Erro banner:", error);
+    }
+  }
+
+  // Auto-rotação dos banners a cada 5 segundos
+  useEffect(() => {
+    if (banners.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prev) => {
+        const nextIndex = (prev + 1) % banners.length;
+        // Registra view do próximo banner
+        try {
+          supabase.rpc("increment_ad_view", { ad_id: banners[nextIndex].id });
+        } catch (err) {
+          console.warn("Falha ao registrar view do banner:", err);
+        }
+        return nextIndex;
+      });
+    }, 5000); // 5 segundos
+
+    return () => clearInterval(interval);
+  }, [banners]);
+
+  const handleBannerClick = async (banner: BannerAd) => {
+    if (banner) {
+      // 1. Tenta registrar o clique (fire and forget)
+      try {
+        const { error } = await supabase.rpc("increment_ad_click", {
+          ad_id: banner.id,
+        });
+        if (error) console.warn("Erro RPC Click:", error);
+      } catch (err) {
+        console.warn("Erro ao chamar RPC Click:", err);
+      }
+
+      // 2. Abre o link (Prioridade)
+      if (banner.link_url) {
+        window.open(banner.link_url, "_blank");
+      }
+    }
+  };
+
+  const goToBanner = (index: number) => {
+    setCurrentBannerIndex(index);
+    // Registra view
+    try {
+      supabase.rpc("increment_ad_view", { ad_id: banners[index].id });
+    } catch (err) {
+      console.warn("Falha ao registrar view:", err);
+    }
+  };
+
+  // (Implementação movida acima)
 
   function formatTimeAgo(dateString: string) {
     if (!dateString) return "";

@@ -33,7 +33,7 @@ const Biblioteca = lazy(() => import("./pages/Biblioteca"));
 const Comunicados = lazy(() => import("./pages/Comunicados"));
 const Votacoes = lazy(() => import("./pages/Votacoes"));
 const Transparencia = lazy(() => import("./pages/Transparencia"));
-const Financeiro = lazy(() => import("./pages/Financeiro"));
+const Financeiro = lazy(() => import("./pages/Financial/Dashboard")); // Novo Dashboard Financeiro
 const Assembleias = lazy(() => import("./pages/Assembleias"));
 const AssembleiaDetalhes = lazy(() => import("./pages/AssembleiaDetalhes"));
 const AssembleiaPresenca = lazy(() => import("./pages/AssembleiaPresenca"));

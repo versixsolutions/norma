@@ -55,9 +55,9 @@ export function MessagesList({
                 .split("**")
                 .map((part, i) =>
                   i % 2 === 1 ? (
-                    <strong key={i}>{part}</strong>
+                    <strong key={`strong-${msg.id}-${i}`}>{part}</strong>
                   ) : (
-                    <span key={i}>{part}</span>
+                    <span key={`span-${msg.id}-${i}`}>{part}</span>
                   ),
                 )}
             </p>
@@ -108,9 +108,9 @@ export function MessagesList({
 
           {msg.options && (
             <div className="flex flex-wrap gap-2 mt-2 max-w-[90%] animate-fade-in">
-              {msg.options.map((opt) => (
+              {msg.options.map((opt, index) => (
                 <button
-                  key={opt.value}
+                  key={`${opt.value}-${index}`}
                   onClick={() => onOptionClick(opt)}
                   aria-label={`Opção: ${opt.label}`}
                   className={`text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm border flex items-center gap-2 ${

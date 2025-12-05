@@ -68,34 +68,39 @@ export default function Transparencia() {
       ).toISOString();
       const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
 
+      // Buscar despesas do mês (amount < 0) na nova tabela
       const { data: despesasMes } = await supabase
-        .from("despesas")
+        .from("financial_transactions")
         .select("amount")
         .eq("condominio_id", profile?.condominio_id)
-        .gte("created_at", startOfMonth);
+        .lt("amount", 0)
+        .gte("reference_month", startOfMonth);
 
+      // Buscar despesas do ano (amount < 0) na nova tabela
       const { data: despesasAno } = await supabase
-        .from("despesas")
+        .from("financial_transactions")
         .select("amount")
         .eq("condominio_id", profile?.condominio_id)
-        .gte("created_at", startOfYear);
+        .lt("amount", 0)
+        .gte("reference_month", startOfYear);
 
-      const { data: categorias } = await supabase
-        .from("despesa_categories")
-        .select("id")
-        .eq("condominio_id", profile?.condominio_id);
+      // Contar categorias de despesa
+      const { count: categoriasCount } = await supabase
+        .from("financial_categories")
+        .select("*", { count: "exact", head: true })
+        .eq("type", "DESPESA");
 
       const totalMes =
-        despesasMes?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
+        despesasMes?.reduce((sum, d) => sum + Math.abs(d.amount || 0), 0) || 0;
       const totalAno =
-        despesasAno?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
+        despesasAno?.reduce((sum, d) => sum + Math.abs(d.amount || 0), 0) || 0;
 
       setKpis({
         assembleias: { total, proxima: proximaData, emAndamento },
         financeiro: {
           totalMes,
           totalAno,
-          categorias: categorias?.length || 0,
+          categorias: categoriasCount || 0,
         },
       });
     } catch (error) {

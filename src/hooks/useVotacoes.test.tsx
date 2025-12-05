@@ -1,160 +1,302 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor, act } from '@testing-library/react'
-import { useVotacoes } from './useVotacoes'
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import toast from "react-hot-toast";
+import { useVotacoes } from "./useVotacoes";
+import * as AuthContext from "../contexts/AuthContext";
 
-// Mock AuthContext
-vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    user: { id: 'user-123' },
-    profile: { condominio_id: 'condo-123' }
-  })
-}))
+// Mock a nível de módulo
+vi.mock("../contexts/AuthContext");
+vi.mock("react-hot-toast");
+vi.mock("../lib/supabase"); // Agora usamos o mock de __mocks__/supabase.ts
 
-// Mock toast
-vi.mock('react-hot-toast', () => ({
-  default: {
-    success: vi.fn(),
-    error: vi.fn(),
-    loading: vi.fn(() => 'toast-id'),
-    dismiss: vi.fn()
-  }
-}))
+import { supabase } from "../lib/supabase";
 
-// Supabase mock helpers
-const supabaseFrom = vi.fn()
-const supabaseRpc = vi.fn()
-vi.mock('../lib/supabase', () => ({
-  supabase: {
-    from: (table: string) => supabaseFrom(table),
-    rpc: (fn: string, args?: any) => supabaseRpc(fn, args)
-  }
-}))
+const mockVotacoes = [
+  {
+    id: "vot-1",
+    title: "Pauta 1",
+    description: "Desc",
+    start_date: "2025-11-01T00:00:00Z",
+    end_date: "2025-12-30T00:00:00Z", // ativa
+    total_voters: 100,
+    is_secret: false,
+    options: [
+      { id: 1, text: "Sim" },
+      { id: 2, text: "Não" },
+    ],
+    condominio_id: "condo-123",
+  },
+  {
+    id: "vot-2",
+    title: "Pauta 2",
+    description: "Desc",
+    start_date: "2025-10-01T00:00:00Z",
+    end_date: "2025-11-01T00:00:00Z", // encerrada
+    total_voters: 80,
+    is_secret: true,
+    options: [
+      { id: 3, text: "A" },
+      { id: 4, text: "B" },
+    ],
+    condominio_id: "condo-123",
+  },
+];
 
-function setupSuccessMocks() {
-  supabaseFrom.mockImplementation((table: string) => {
-    if (table === 'votacoes') {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: async () => ({
-              data: [
-                {
-                  id: 'vot-1',
-                  title: 'Pauta 1',
-                  description: 'Desc',
-                  start_date: '2025-11-01T00:00:00Z',
-                  end_date: '2025-12-30T00:00:00Z', // ativa
-                  total_voters: 100,
-                  is_secret: false,
-                  options: [{ id: 1, text: 'Sim' }, { id: 2, text: 'Não' }],
-                  condominio_id: 'condo-123'
-                },
-                {
-                  id: 'vot-2',
-                  title: 'Pauta 2',
-                  description: 'Desc',
-                  start_date: '2025-10-01T00:00:00Z',
-                  end_date: '2025-11-01T00:00:00Z', // encerrada
-                  total_voters: 80,
-                  is_secret: true,
-                  options: [{ id: 3, text: 'A' }, { id: 4, text: 'B' }],
-                  condominio_id: 'condo-123'
-                }
-              ]
-            })
-          })
-        })
-      }
-    }
-    if (table === 'votos') {
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: { option_id: 1 } }) })
-          })
-        }),
-        insert: async () => ({ error: null })
-      }
-    }
-    return { select: () => ({}) }
-  })
-  supabaseRpc.mockImplementation((fn: string) => {
-    if (fn === 'get_votacao_results') {
-      return { data: { '1': 60, '2': 40 } }
-    }
-    return { data: {} }
-  })
-}
-
-describe('useVotacoes', () => {
+describe("useVotacoes", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    setupSuccessMocks()
-  })
+    vi.clearAllMocks();
 
-  it('carrega votações e enriquece com resultados e voto do usuário', async () => {
-    const { result } = renderHook(() => useVotacoes('all'))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.votacoes.length).toBe(2)
-    const [ativa, encerrada] = result.current.votacoes
-    expect(ativa.status).toBe('ativa')
-    expect(encerrada.status).toBe('encerrada')
-    expect(ativa.results).toBeDefined()
-    expect(ativa.user_vote).toBe('Sim')
-    expect(ativa.user_already_voted).toBe(true)
-  })
+    // Mock do useAuth
+    vi.mocked(AuthContext.useAuth).mockReturnValue({
+      user: { id: "user-123" },
+      profile: { condominio_id: "condo-123" },
+    } as any);
+  });
 
-  it('filtra por status ativa/encerrada corretamente', async () => {
-    const { result: r1 } = renderHook(() => useVotacoes('ativa'))
-    await waitFor(() => expect(r1.current.loading).toBe(false))
-    expect(r1.current.votacoes.length).toBeGreaterThan(0)
-    expect(r1.current.votacoes.some(v => v.status === 'ativa')).toBe(true)
+  it("carrega votações e enriquece com resultados e voto do usuário", async () => {
+    // Setup mocks específicos para este teste
+    const fromMock = supabase.from as vi.Mock;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "votacoes") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: mockVotacoes, error: null }),
+        };
+      }
+      if (table === "votos") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi
+            .fn()
+            .mockResolvedValue({ data: { option_id: 1 }, error: null }),
+        };
+      }
+      return {};
+    });
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { "1": 60, "2": 40 },
+      error: null,
+    });
 
-    const { result: r2 } = renderHook(() => useVotacoes('encerrada'))
-    await waitFor(() => expect(r2.current.loading).toBe(false))
-    expect(r2.current.votacoes.length).toBeGreaterThan(0)
-    expect(r2.current.votacoes.some(v => v.status === 'encerrada')).toBe(true)
-  })
+    const { result } = renderHook(() => useVotacoes("all"));
 
-  it('trata erro ao carregar votações', async () => {
-    supabaseFrom.mockImplementationOnce(() => ({ select: () => ({ eq: () => ({ order: async () => ({ error: new Error('db error') }) }) }) }))
-    const { result } = renderHook(() => useVotacoes('all'))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.error).toBeDefined()
-  })
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-  it('impede voto duplo e voto em votação encerrada', async () => {
-    const { result } = renderHook(() => useVotacoes('all'))
-    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.votacoes.length).toBe(2);
+    const [ativa, encerrada] = result.current.votacoes;
 
-    // já votado na ativa
-    const ok1 = await result.current.votar('vot-1', 1)
-    expect(ok1).toBe(false)
+    expect(ativa.status).toBe("ativa");
+    expect(encerrada.status).toBe("encerrada");
+    expect(ativa.results).toEqual({ "1": 60, "2": 40 });
+    expect(ativa.user_vote).toBe("Sim");
+    expect(ativa.user_already_voted).toBe(true);
+  });
 
-    // simula encerrada escolhida
+  it("não faz nada se não houver profile", async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValueOnce({
+      user: null,
+      profile: null,
+    } as any);
+
+    const { result } = renderHook(() => useVotacoes());
+
+    // O hook é chamado, mas o useEffect não deve disparar o load
+    expect(result.current.loading).toBe(true); // Estado inicial
+    expect(result.current.votacoes.length).toBe(0);
+    // Pequeno delay para garantir que o useEffect não foi chamado
+    await new Promise((r) => setTimeout(r, 50));
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("trata erro ao carregar votações", async () => {
+    const dbError = new Error("db error");
+    vi.mocked(supabase.from).mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ error: dbError }),
+    }));
+
+    const { result } = renderHook(() => useVotacoes("all"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe(dbError);
+    expect(toast.error).toHaveBeenCalledWith("Erro ao carregar votações");
+  });
+
+  it("impede voto duplo e voto em votação encerrada", async () => {
+    const votesByVotacao: Record<
+      string,
+      { data: { option_id: number } | null; error: null }
+    > = {
+      "vot-1": { data: { option_id: 1 }, error: null },
+      "vot-2": { data: null, error: null },
+    };
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "votacoes") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: mockVotacoes, error: null }),
+        };
+      }
+      if (table === "votos") {
+        return {
+          select: () => ({
+            eq: vi.fn().mockImplementation((column, value) => {
+              if (column === "votacao_id") {
+                const votacaoId = value as string;
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue(
+                      votesByVotacao[votacaoId] ?? {
+                        data: null,
+                        error: null,
+                      },
+                    ),
+                  }),
+                };
+              }
+              return {
+                maybeSingle: vi
+                  .fn()
+                  .mockResolvedValue({ data: null, error: null }),
+              };
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: {}, error: null });
+
+    const { result } = renderHook(() => useVotacoes("all"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let success;
     await act(async () => {
-      const ok2 = await result.current.votar('vot-2', 3)
-      expect(ok2).toBe(false)
-    })
-  })
+      success = await result.current.votar("vot-1", 1);
+    });
+    expect(success).toBe(false);
 
-  it('registra voto e recarrega dados', async () => {
-    // ajustar mock para não ter voto do usuário inicialmente
-    supabaseFrom.mockImplementation((table: string) => {
-      if (table === 'votacoes') {
-        return { select: () => ({ eq: () => ({ order: async () => ({ data: [{ id: 'vot-3', title: 'Nova', description: '', start_date: '2025-11-01T00:00:00Z', end_date: '2025-12-30T00:00:00Z', total_voters: 50, is_secret: false, options: [{ id: 10, text: 'X' }, { id: 11, text: 'Y' }], condominio_id: 'condo-123' }] }) }) }) }
+    await act(async () => {
+      success = await result.current.votar("vot-2", 3);
+    });
+    expect(success).toBe(false);
+
+    expect(toast.error).toHaveBeenNthCalledWith(
+      1,
+      "❌ Você já votou nesta pauta! Cada pessoa vota uma única vez.",
+    );
+    expect(toast.error).toHaveBeenNthCalledWith(
+      2,
+      "❌ Esta votação foi encerrada. Não é mais possível votar.",
+    );
+  });
+
+  it("registra voto e recarrega dados", async () => {
+    const newVotacao = { ...mockVotacoes[0], id: "vot-3" };
+
+    // Carga inicial: sem voto
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "votacoes") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [newVotacao], error: null }),
+        };
       }
-      if (table === 'votos') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }), insert: async () => ({ error: null }) }
+      if (table === "votos") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), // Não votou ainda
+          insert: vi.fn().mockResolvedValue({ error: null }), // Insert com sucesso
+        };
       }
-      return { select: () => ({}) }
-    })
-    supabaseRpc.mockImplementation(() => ({ data: { '10': 1, '11': 0 } }))
+      return {};
+    });
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: {}, error: null });
 
-    const { result } = renderHook(() => useVotacoes('all'))
-    await waitFor(() => expect(result.current.loading).toBe(false))
+    const { result } = renderHook(() => useVotacoes("all"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.votacoes[0].user_already_voted).toBe(false);
 
-    const ok = await act(async () => result.current.votar('vot-3', 10))
-    expect(ok).toBe(true)
-  })
-})
+    // Após o voto, a recarga vai acontecer. Mockamos o novo estado.
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "votacoes") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: [newVotacao], error: null }),
+        };
+      }
+      if (table === "votos") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi
+            .fn()
+            .mockResolvedValue({ data: { option_id: 1 }, error: null }), // Agora o voto existe
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      return {};
+    });
+
+    let success;
+    await act(async () => {
+      success = await result.current.votar("vot-3", 1);
+    });
+
+    expect(success).toBe(true);
+    expect(toast.loading).toHaveBeenCalledWith("Registrando seu voto...");
+    expect(toast.success).toHaveBeenCalledWith(
+      "✅ Seu voto foi registrado com sucesso!",
+    );
+
+    await waitFor(() => {
+      expect(result.current.votacoes[0].user_already_voted).toBe(true);
+      expect(result.current.votacoes[0].user_vote).toBe("Sim");
+    });
+  });
+
+  it("trata erro de voto duplicado vindo do banco de dados", async () => {
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "votacoes") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi
+            .fn()
+            .mockResolvedValue({ data: [mockVotacoes[0]], error: null }),
+        };
+      }
+      if (table === "votos") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }), // UI acha que não votou
+          insert: vi.fn().mockResolvedValue({ error: { code: "23505" } }), // DB acusa duplicata
+        };
+      }
+      return {};
+    });
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: {}, error: null });
+
+    const { result } = renderHook(() => useVotacoes());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let success;
+    await act(async () => {
+      success = await result.current.votar("vot-1", 1);
+    });
+
+    expect(success).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith("Você já votou nesta pauta!");
+  });
+});
