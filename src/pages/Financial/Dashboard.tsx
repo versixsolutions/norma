@@ -239,6 +239,7 @@ export default function FinancialDashboard() {
   const [condominioId, setCondominioId] = useState<string>("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const [viewMode, setViewMode] = useState<"resumo" | "detalhamento">("resumo");
   const [inadimplenciaEntries, setInadimplenciaEntries] = useState<
     InadimplenciaRecord[]
   >([]);
@@ -555,6 +556,28 @@ export default function FinancialDashboard() {
               <LineChartIcon className="h-4 w-4" />
             </button>
           </div>
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+            <button
+              onClick={() => setViewMode("resumo")}
+              className={`px-3 py-2 rounded text-sm font-semibold transition-colors ${
+                viewMode === "resumo"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Resumo
+            </button>
+            <button
+              onClick={() => setViewMode("detalhamento")}
+              className={`px-3 py-2 rounded text-sm font-semibold transition-colors ${
+                viewMode === "detalhamento"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Detalhamento
+            </button>
+          </div>
           {isSindico && (
             <button
               onClick={() => setShowTransactionForm(true)}
@@ -661,309 +684,317 @@ export default function FinancialDashboard() {
         chartType={chartType}
       />
 
-      {/* Alertas Orçamentários */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 mt-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Monitoramento de orçamento
-            </p>
-            <h3 className="text-xl font-bold text-slate-900">
-              Alertas Orçamentários
-            </h3>
-            <p className="text-sm text-slate-600 mt-1">
-              Fonte: view v_budget_alerts (mensal e anual).
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowBudgetPlanModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
-            >
-              📊 Ver Planilha Anual
-            </button>
-            <label className="text-sm text-slate-600" htmlFor="alert-month">
-              Mês ref. (AAAA-MM)
-            </label>
-            <input
-              id="alert-month"
-              type="month"
-              value={alertMonth}
-              onChange={(e) => setAlertMonth(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={() => setAlertMonth("")}
-              className="text-sm text-primary font-semibold hover:underline"
-            >
-              Limpar
-            </button>
-          </div>
-        </div>
-
-        {filteredBudgetAlerts.length === 0 ? (
-          <div className="text-sm text-slate-500">
-            Nenhum alerta disponível para o filtro.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredBudgetAlerts.slice(0, 9).map((alert) => {
-                const monthlyDelta = alert.monthly_limit
-                  ? alert.spent_month - alert.monthly_limit
-                  : null;
-                const annualDelta = alert.annual_limit
-                  ? alert.spent_year - alert.annual_limit
-                  : null;
-                const monthlyPct = alert.monthly_ratio
-                  ? Math.min(alert.monthly_ratio * 100, 400)
-                  : 0;
-                const annualPct = alert.annual_ratio
-                  ? Math.min(alert.annual_ratio * 100, 400)
-                  : 0;
-
-                return (
-                  <div
-                    key={`${alert.category_code}-${alert.month_ref || "annual"}`}
-                    className={`rounded-xl p-4 border shadow-sm ${severityStyles[alert.severity]}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                          {alert.month_ref || "Anual"}
-                        </p>
-                        <h4 className="text-base font-bold text-slate-900">
-                          {alert.category_name || alert.category_code}
-                        </h4>
-                        <p className="text-xs text-slate-500">
-                          Código {alert.category_code}
-                        </p>
-                      </div>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${severityStyles[alert.severity]}`}
-                      >
-                        <span
-                          className={`w-2 h-2 rounded-full ${severityDot[alert.severity]}`}
-                        />
-                        {alert.severity.toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                        <span>Mensal</span>
-                        <span>
-                          {formatCurrency(alert.spent_month)} /{" "}
-                          {alert.monthly_limit
-                            ? formatCurrency(alert.monthly_limit)
-                            : "--"}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-white/60 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-slate-800"
-                          style={{ width: `${monthlyPct}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-slate-700">
-                        Ratio:{" "}
-                        {alert.monthly_ratio
-                          ? `${(alert.monthly_ratio * 100).toFixed(0)}%`
-                          : "--"}
-                        {monthlyDelta !== null && (
-                          <span
-                            className={`ml-2 font-semibold ${monthlyDelta > 0 ? "text-rose-700" : "text-emerald-700"}`}
-                          >
-                            Delta {formatCurrency(monthlyDelta)}
-                          </span>
-                        )}
-                      </p>
-
-                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-2">
-                        <span>Anual</span>
-                        <span>
-                          {formatCurrency(alert.spent_year)} /{" "}
-                          {alert.annual_limit
-                            ? formatCurrency(alert.annual_limit)
-                            : "--"}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-white/60 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-slate-500"
-                          style={{ width: `${annualPct}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-slate-700">
-                        Ratio:{" "}
-                        {alert.annual_ratio
-                          ? `${(alert.annual_ratio * 100).toFixed(0)}%`
-                          : "--"}
-                        {annualDelta !== null && (
-                          <span
-                            className={`ml-2 font-semibold ${annualDelta > 0 ? "text-rose-700" : "text-emerald-700"}`}
-                          >
-                            Delta {formatCurrency(annualDelta)}
-                          </span>
-                        )}
-                      </p>
-
-                      {alert.is_over_budget && (
-                        <div className="mt-2 text-xs font-semibold text-rose-700">
-                          🚨 Acima do previsto (mensal ou anual)
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+      {viewMode === "detalhamento" && (
+        <>
+          {/* Alertas Orçamentários */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 md:p-6 mt-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Monitoramento de orçamento
+                </p>
+                <h3 className="text-xl font-bold text-slate-900">
+                  Alertas Orçamentários
+                </h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  Fonte: view v_budget_alerts (mensal e anual).
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setShowBudgetPlanModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+                >
+                  📊 Ver Planilha Anual
+                </button>
+                <label className="text-sm text-slate-600" htmlFor="alert-month">
+                  Mês ref. (AAAA-MM)
+                </label>
+                <input
+                  id="alert-month"
+                  type="month"
+                  value={alertMonth}
+                  onChange={(e) => setAlertMonth(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => setAlertMonth("")}
+                  className="text-sm text-primary font-semibold hover:underline"
+                >
+                  Limpar
+                </button>
+              </div>
             </div>
 
-            {/* Tabela compacta */}
-            <div className="overflow-x-auto border border-slate-100 rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Categoria</th>
-                    <th className="px-3 py-2 text-left">Mês</th>
-                    <th className="px-3 py-2 text-right">Gasto</th>
-                    <th className="px-3 py-2 text-right">Limite</th>
-                    <th className="px-3 py-2 text-right">Ratio</th>
-                    <th className="px-3 py-2 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredBudgetAlerts.slice(0, 30).map((alert) => {
-                    const delta = alert.monthly_limit
+            {filteredBudgetAlerts.length === 0 ? (
+              <div className="text-sm text-slate-500">
+                Nenhum alerta disponível para o filtro.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredBudgetAlerts.slice(0, 9).map((alert) => {
+                    const monthlyDelta = alert.monthly_limit
                       ? alert.spent_month - alert.monthly_limit
                       : null;
-                    const ratioText = alert.monthly_ratio
-                      ? `${(alert.monthly_ratio * 100).toFixed(0)}%`
-                      : "--";
+                    const annualDelta = alert.annual_limit
+                      ? alert.spent_year - alert.annual_limit
+                      : null;
+                    const monthlyPct = alert.monthly_ratio
+                      ? Math.min(alert.monthly_ratio * 100, 400)
+                      : 0;
+                    const annualPct = alert.annual_ratio
+                      ? Math.min(alert.annual_ratio * 100, 400)
+                      : 0;
 
                     return (
-                      <tr
-                        key={`${alert.category_code}-${alert.month_ref || "table"}`}
-                        className="hover:bg-slate-50 transition-colors"
+                      <div
+                        key={`${alert.category_code}-${alert.month_ref || "annual"}`}
+                        className={`rounded-xl p-4 border shadow-sm ${severityStyles[alert.severity]}`}
                       >
-                        <td className="px-3 py-2">
-                          <div className="font-semibold text-slate-900">
-                            {alert.category_name || alert.category_code}
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              {alert.month_ref || "Anual"}
+                            </p>
+                            <h4 className="text-base font-bold text-slate-900">
+                              {alert.category_name || alert.category_code}
+                            </h4>
+                            <p className="text-xs text-slate-500">
+                              Código {alert.category_code}
+                            </p>
                           </div>
-                          <div className="text-xs text-slate-500">
-                            {alert.category_code}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-slate-700">
-                          {alert.month_ref || "--"}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-900 font-semibold">
-                          {formatCurrency(alert.spent_month)}
-                          {delta !== null && (
-                            <span
-                              className={`block text-xs ${delta > 0 ? "text-rose-700" : "text-emerald-700"}`}
-                            >
-                              Delta {formatCurrency(delta)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
-                          {alert.monthly_limit
-                            ? formatCurrency(alert.monthly_limit)
-                            : "--"}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-700">
-                          {ratioText}
-                        </td>
-                        <td className="px-3 py-2 text-center">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${severityStyles[alert.severity]}`}
                           >
                             <span
                               className={`w-2 h-2 rounded-full ${severityDot[alert.severity]}`}
                             />
-                            {alert.severity}
+                            {alert.severity.toUpperCase()}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                            <span>Mensal</span>
+                            <span>
+                              {formatCurrency(alert.spent_month)} /{" "}
+                              {alert.monthly_limit
+                                ? formatCurrency(alert.monthly_limit)
+                                : "--"}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-white/60 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-slate-800"
+                              style={{ width: `${monthlyPct}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-slate-700">
+                            Ratio:{" "}
+                            {alert.monthly_ratio
+                              ? `${(alert.monthly_ratio * 100).toFixed(0)}%`
+                              : "--"}
+                            {monthlyDelta !== null && (
+                              <span
+                                className={`ml-2 font-semibold ${monthlyDelta > 0 ? "text-rose-700" : "text-emerald-700"}`}
+                              >
+                                Delta {formatCurrency(monthlyDelta)}
+                              </span>
+                            )}
+                          </p>
+
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-2">
+                            <span>Anual</span>
+                            <span>
+                              {formatCurrency(alert.spent_year)} /{" "}
+                              {alert.annual_limit
+                                ? formatCurrency(alert.annual_limit)
+                                : "--"}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-white/60 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-slate-500"
+                              style={{ width: `${annualPct}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-slate-700">
+                            Ratio:{" "}
+                            {alert.annual_ratio
+                              ? `${(alert.annual_ratio * 100).toFixed(0)}%`
+                              : "--"}
+                            {annualDelta !== null && (
+                              <span
+                                className={`ml-2 font-semibold ${annualDelta > 0 ? "text-rose-700" : "text-emerald-700"}`}
+                              >
+                                Delta {formatCurrency(annualDelta)}
+                              </span>
+                            )}
+                          </p>
+
+                          {alert.is_over_budget && (
+                            <div className="mt-2 text-xs font-semibold text-rose-700">
+                              🚨 Acima do previsto (mensal ou anual)
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tabela compacta */}
+                <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Categoria</th>
+                        <th className="px-3 py-2 text-left">Mês</th>
+                        <th className="px-3 py-2 text-right">Gasto</th>
+                        <th className="px-3 py-2 text-right">Limite</th>
+                        <th className="px-3 py-2 text-right">Ratio</th>
+                        <th className="px-3 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredBudgetAlerts.slice(0, 30).map((alert) => {
+                        const delta = alert.monthly_limit
+                          ? alert.spent_month - alert.monthly_limit
+                          : null;
+                        const ratioText = alert.monthly_ratio
+                          ? `${(alert.monthly_ratio * 100).toFixed(0)}%`
+                          : "--";
+
+                        return (
+                          <tr
+                            key={`${alert.category_code}-${alert.month_ref || "table"}`}
+                            className="hover:bg-slate-50 transition-colors"
+                          >
+                            <td className="px-3 py-2">
+                              <div className="font-semibold text-slate-900">
+                                {alert.category_name || alert.category_code}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {alert.category_code}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">
+                              {alert.month_ref || "--"}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-900 font-semibold">
+                              {formatCurrency(alert.spent_month)}
+                              {delta !== null && (
+                                <span
+                                  className={`block text-xs ${delta > 0 ? "text-rose-700" : "text-emerald-700"}`}
+                                >
+                                  Delta {formatCurrency(delta)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-700">
+                              {alert.monthly_limit
+                                ? formatCurrency(alert.monthly_limit)
+                                : "--"}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-700">
+                              {ratioText}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${severityStyles[alert.severity]}`}
+                              >
+                                <span
+                                  className={`w-2 h-2 rounded-full ${severityDot[alert.severity]}`}
+                                />
+                                {alert.severity}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Transactions Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-800">
+                Transações Recentes
+              </h3>
+              <button className="text-sm text-primary font-bold hover:underline">
+                Ver Todas
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Data</th>
+                    <th className="px-6 py-4 font-semibold">Descrição</th>
+                    <th className="px-6 py-4 font-semibold">Categoria</th>
+                    <th className="px-6 py-4 font-semibold text-right">
+                      Valor
+                    </th>
+                    <th className="px-6 py-4 font-semibold text-center">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {transactions
+                    .filter((t) => {
+                      if (selectedPeriods.length === 0) return true;
+                      const transactionPeriod = t.reference_month.slice(0, 7);
+                      return selectedPeriods.includes(transactionPeriod);
+                    })
+                    .slice(0, 10)
+                    .map((t) => (
+                      <tr key={t.id} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
+                          {formatDate(t.payment_date || t.reference_month)}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-900">
+                          {t.description}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            {t.category?.name || t.category_code}
+                          </span>
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-right font-bold ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}
+                        >
+                          {formatCurrency(t.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Aprovado
                           </span>
                         </td>
                       </tr>
-                    );
-                  })}
+                    ))}
+
+                  {transactions.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-12 text-center text-gray-400"
+                      >
+                        Nenhuma transação encontrada.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Recent Transactions Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-5 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-lg font-bold text-gray-800">
-            Transações Recentes
-          </h3>
-          <button className="text-sm text-primary font-bold hover:underline">
-            Ver Todas
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Data</th>
-                <th className="px-6 py-4 font-semibold">Descrição</th>
-                <th className="px-6 py-4 font-semibold">Categoria</th>
-                <th className="px-6 py-4 font-semibold text-right">Valor</th>
-                <th className="px-6 py-4 font-semibold text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {transactions
-                .filter((t) => {
-                  if (selectedPeriods.length === 0) return true;
-                  const transactionPeriod = t.reference_month.slice(0, 7);
-                  return selectedPeriods.includes(transactionPeriod);
-                })
-                .slice(0, 10)
-                .map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
-                      {formatDate(t.payment_date || t.reference_month)}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {t.description}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {t.category?.name || t.category_code}
-                      </span>
-                    </td>
-                    <td
-                      className={`px-6 py-4 text-right font-bold ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {formatCurrency(t.amount)}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Aprovado
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-
-              {transactions.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-12 text-center text-gray-400"
-                  >
-                    Nenhuma transação encontrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Modal - Nova Transação */}
       {showTransactionForm && (
