@@ -111,14 +111,13 @@ describe("CategorySelector", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(
-        screen.getByText((content, element) => {
-          return (
-            element?.textContent?.includes("1") &&
-            element?.textContent?.includes("Receitas")
-          );
-        }),
-      ).toBeInTheDocument();
+      const categoryButtons = screen.getAllByRole("button");
+      const receitasButton = categoryButtons.find(
+        (btn) =>
+          btn.textContent?.includes("1") &&
+          btn.textContent?.includes("Receitas"),
+      );
+      expect(receitasButton).toBeDefined();
     });
   });
 
