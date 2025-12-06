@@ -111,7 +111,7 @@ describe("CategorySelector", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(screen.getByText("Receitas")).toBeInTheDocument();
+      expect(screen.getByText(/1.*-.*Receitas/)).toBeInTheDocument();
     });
   });
 
