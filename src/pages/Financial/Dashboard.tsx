@@ -129,7 +129,7 @@ const InadimplenciaForm: React.FC<InadimplenciaFormProps> = ({
         <div>
           <h3 className="text-xl font-bold text-slate-900">Inadimplência</h3>
           <p className="text-sm text-slate-600">
-            Informe o percentual de inadimplência do mês e o acumulado geral.
+            Informe o valor de inadimplência do mês e o acumulado geral.
           </p>
         </div>
       </div>
@@ -161,21 +161,21 @@ const InadimplenciaForm: React.FC<InadimplenciaFormProps> = ({
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Inadimplência do mês (%)
+            Inadimplência do mês (R$)
           </label>
           <input
             type="text"
             inputMode="decimal"
             value={inadMes}
             onChange={(e) => setInadMes(e.target.value.replace(/[^\d.,]/g, ""))}
-            placeholder="0,0"
+            placeholder="0,00"
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Inadimplência total (%)
+            Inadimplência total (R$)
           </label>
           <input
             type="text"
@@ -184,7 +184,7 @@ const InadimplenciaForm: React.FC<InadimplenciaFormProps> = ({
             onChange={(e) =>
               setInadTotal(e.target.value.replace(/[^\d.,]/g, ""))
             }
-            placeholder="0,0"
+            placeholder="0,00"
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
           />
         </div>
@@ -342,11 +342,6 @@ export default function FinancialDashboard() {
       inadimplenciaTotal: inadTotal,
     };
   }, [transactions, selectedPeriods, inadimplenciaEntries]);
-
-  const formatPercent = (value: number | null) => {
-    if (value === null || Number.isNaN(value)) return "--";
-    return `${value.toFixed(1)}%`;
-  };
 
   const chartData = useMemo(() => {
     // Se nenhum período selecionado, retornar vazio
@@ -541,13 +536,18 @@ export default function FinancialDashboard() {
             </div>
           </div>
           <div className="text-2xl md:text-3xl font-extrabold tracking-tight text-amber-700">
-            {formatPercent(summaryData.inadimplenciaMes)}
+            {summaryData.inadimplenciaMes !== null
+              ? formatCurrency(summaryData.inadimplenciaMes)
+              : "--"}
           </div>
           <p className="text-xs font-medium text-amber-600 mt-1 md:mt-2 mb-1">
             Inadimplência do mês selecionado
           </p>
           <div className="text-xs md:text-sm text-amber-700 font-semibold">
-            Total: {formatPercent(summaryData.inadimplenciaTotal)}
+            Total:{" "}
+            {summaryData.inadimplenciaTotal !== null
+              ? formatCurrency(summaryData.inadimplenciaTotal)
+              : "--"}
           </div>
         </div>
       </div>
